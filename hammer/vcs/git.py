@@ -20,7 +20,7 @@ class Git(BaseVcs):
                     result = None
 
                 else:
-                    raise
+                    raise  # pragma: no cover
 
             return result or None
 
@@ -28,7 +28,7 @@ class Git(BaseVcs):
         repo_url = self.repo_url()
 
         if not repo_url:
-            abort('Repo url was not found')
+            abort('Repo url was not found')  # pragma: no cover
 
         self.remote_cmd('git clone %(repo)s %(dir)s' % dict(
             repo=repo_url,
@@ -61,7 +61,7 @@ class Git(BaseVcs):
                     # head state.
                     branch = None
                 else:
-                    raise
+                    raise  # pragma: no cover
 
             if not branch:
                 # Lets attempt to figure out the branch
@@ -85,9 +85,9 @@ class Git(BaseVcs):
 
                 if not valid_branches:
                     # No compatible branch found. Oh well lets just abort...
-                    abort('Could not figure out remote branch (for %s)' % commit_id)
+                    abort('Could not figure out remote branch (for %s)' % commit_id)  # pragma: no cover
 
-                elif len(valid_branches) > 1:
+                elif len(valid_branches) > 1:  # pragma: no cover
                     if ambiguous:
                         return '|'.join(valid_branches)
 
@@ -157,7 +157,7 @@ class Git(BaseVcs):
                         commit=commit_id,
                     ))
 
-                    if commit_log and commit_id in commit_log:
+                    if commit_log and commit_id in commit_log:  # pragma: no branch
                         valid_branches.append(branch)
 
                 except SystemExit as e:
@@ -213,12 +213,12 @@ class Git(BaseVcs):
 
     def log_add_branch(self, line, needle='branch'):
         if not line:
-            return line
+            return line  # pragma: no cover
 
         commit_hash = line.split()[0]
 
         if not commit_hash:
-            return line
+            return line  # pragma: no cover
 
         return line % {needle: self.get_branch(commit_hash, ambiguous=True)}
 

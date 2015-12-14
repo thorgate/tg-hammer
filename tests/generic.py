@@ -1,8 +1,9 @@
+import os
 import pytest
 
 from fabric.api import env
 
-from hammer.vcs import BaseVcs
+from hammer.vcs import BaseVcs, Vcs
 
 
 def test_use_sudo_loaded_from_env():
@@ -24,3 +25,10 @@ def test_code_dir_from_env():
     vcs = BaseVcs('')
 
     assert vcs.code_dir == 'dummy'
+
+
+def test_invalid_vcs_raises_env_error():
+    setattr(env, 'code_dir', 'dummy')
+
+    with pytest.raises(EnvironmentError):
+        Vcs.init(os.path.join('tests', 'ssh'))

@@ -335,6 +335,20 @@ def test_stable_branch(repo, monkeypatch):
         'M 3.txt',
     ]
 
+    # Test changed files with single regex
+    files = obj.changed_files(result['revset'], r'(\.png|\.txt)$')
+    assert sorted(files) == [
+        'A dogs.png',
+        'M 3.txt',
+    ]
+
+    # Test changed files with multi regex
+    files = obj.changed_files(result['revset'], [r'^A .+\.png$', r'^M '])
+    assert sorted(files) == [
+        'A dogs.png',
+        'M 3.txt',
+    ]
+
     # Apply backwards action
     obj.update(target_version)
     assert list(obj.version()) == [

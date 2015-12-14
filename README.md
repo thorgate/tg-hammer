@@ -1,7 +1,6 @@
 # tg-hammer
 
-.. image:: https://badge.fury.io/py/tg-hammer.png
-    :target: https://badge.fury.io/py/tg-hammer
+[![PyPI version](https://badge.fury.io/py/tg-hammer.svg)](https://badge.fury.io/py/tg-hammer)
 
 Helpers for fabric based deployments.
 
@@ -10,24 +9,6 @@ Helpers for fabric based deployments.
 Install tg-hammer::
 
     pip install tg-hammer
-
-Then use it in your fabfile::
-
-    from hammer.vcs import VcsProxy
-
-
-    # Provide configuration to the VCS logic
-    # Note: You can omit both of these keys when you
-    #       want them to be retrieved from fabrics `env`
-    vcs_config = {
-        'use_sudo': False,              # Set to True if your target machine requires elevated privileges when running vcs commands
-        'code_dir': '/srv/project',     # Directory on the target machine that will be operated on
-    }
-    vcs = VcsProxy.init(project_root='path to root dir of project', **vcs_config)
-
-    # Now you can use the vcs api
-    vcs.repo_url()
-    > git@github.com:thorgate/tg-hammer.git
 
 
 ## Features
@@ -55,12 +36,11 @@ setup completes, you can ssh into the master machine by using with the following
     User: vagrant
     Pass: vagrant
 
-After establishing an ssh connection use the following commands to execute the functional
-test suite.
+After establishing an ssh connection use the following commands to execute the functional test suite::
 
-> cd /vagrant
-> workon hammer
-> py.test
+    cd /vagrant
+    workon hammer
+    py.test
 
 This will print tons of output and will (hopefully) result in all tests passing. Sadly it's
 not possible to use py.test capturing to reduce the amount of spam since it is not compatible

@@ -45,8 +45,8 @@ class VcsProxy(object):
 
         return getattr(object.__getattribute__(self, "_real"), name)
 
-    def __str__(self):
+    def __str__(self):  # pragma: no cover
         return str(object.__getattribute__(self, "_real"))
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return repr(object.__getattribute__(self, "_real"))

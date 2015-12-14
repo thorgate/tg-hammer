@@ -34,7 +34,7 @@ class Mercurial(BaseVcs):
                     result = None
 
                 else:
-                    raise
+                    raise  # pragma: no cover
 
             return result or None
 
@@ -42,7 +42,7 @@ class Mercurial(BaseVcs):
         repo_url = self.repo_url()
 
         if not repo_url:
-            abort('Repo url was not found')
+            abort('Repo url was not found')  # pragma: no cover
 
         self.remote_cmd('hg clone %s %s' % (repo_url, self.code_dir))
 
@@ -94,7 +94,7 @@ class Mercurial(BaseVcs):
                 return {'backwards': list(reversed(self.get_revisions(revisions))), 'revset': revision_set}
 
             else:
-                return {'message': "Target revision is not related to the current revision"}
+                return {'message': "Target revision is not related to the current revision"}  # pragma: no cover
 
     def _changed_files(self, revision_set):
         with cd(self.code_dir):

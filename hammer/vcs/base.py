@@ -63,17 +63,12 @@ class BaseVcs(object):
     def deployment_list(self, revision=''):
         """ List revisions to apply/un-apply when updating to given revision (if not specified defaults to tip of currently active branch).
 
-            The returned object uses the following signature:
+            The returned dict can have the following keys:
 
-            > {
-            >     "forwards": [],   // If there are revisions to apply, this list will contain the information about each one
-            >     "backwards": [],  // If there are revisions to un-apply, this list will contain the information about each one
-            >     "revset": "",     // Revset string that can be passed on to changed_files
-            > }
-
-            If no revisions are to be applied or the target revision is not
-            related to the currently active revision the resulting object will only
-            contain a 'message' key with the specific message.
+            - forwards:     If there are revisions to apply, this value will contain a list with information about each commit
+            - backwards:    If there are revisions to un-apply, this value will contain a list with information about each commit
+            - revset:       If there are some revisions to apply/un-apply this will contain a string that can be passed on to changed_files
+            - message:      If no revisions are to be applied or something else is wrong, this will contain this information
 
         :param revision: Specific revision to diff against
         :rtype: dict
