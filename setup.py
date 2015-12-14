@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-
-import os
-import sys
+import uuid
 
 import hammer
 
@@ -13,8 +11,8 @@ except ImportError:
     from distutils.core import setup
 
 
-requirements = [str(ir.req) for ir in parse_requirements('requirements/base.txt', session=None)]
-test_requirements = [str(ir.req) for ir in parse_requirements('requirements/development.txt', session=None)]
+requirements = [str(ir.req) for ir in parse_requirements('requirements/base.txt', session=uuid.uuid1())]
+test_requirements = [str(ir.req) for ir in parse_requirements('requirements/development.txt', session=uuid.uuid1())]
 
 setup(
     name=hammer.__name__,
