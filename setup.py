@@ -13,8 +13,8 @@ except ImportError:
     from distutils.core import setup
 
 
-requirements = [str(ir.req) for ir in parse_requirements('requirements/base.txt')]
-test_requirements = [str(ir.req) for ir in parse_requirements('requirements/development.txt')]
+requirements = [str(ir.req) for ir in parse_requirements('requirements/base.txt', session=None)]
+test_requirements = [str(ir.req) for ir in parse_requirements('requirements/development.txt', session=None)]
 
 setup(
     name=hammer.__name__,
