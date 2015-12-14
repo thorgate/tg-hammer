@@ -8,7 +8,7 @@ Install tg-hammer::
 
 Then use it in your fabfile::
 
-    from hammer.vcs import VcsProxy
+    from hammer.vcs import Vcs
 
 
     # Provide configuration to the VCS logic
@@ -18,7 +18,7 @@ Then use it in your fabfile::
         'use_sudo': False,              # Set to True if your target machine requires elevated privileges when running vcs commands
         'code_dir': '/srv/project',     # Directory on the target machine that will be operated on
     }
-    vcs = VcsProxy.init(project_root='path to root dir of project', **vcs_config)
+    vcs = Vcs.init(project_root='path to root dir of project', **vcs_config)
 
     # Now you can use the vcs api
     vcs.repo_url()  # > git@github.com:thorgate/tg-hammer.git

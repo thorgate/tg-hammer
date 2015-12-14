@@ -30,5 +30,7 @@ def test_code_dir_from_env():
 def test_invalid_vcs_raises_env_error():
     setattr(env, 'code_dir', 'dummy')
 
+    v = Vcs.init(os.path.join('tests', 'ssh'))
+
     with pytest.raises(EnvironmentError):
-        Vcs.init(os.path.join('tests', 'ssh'))
+        print(v.NAME)

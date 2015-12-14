@@ -8,12 +8,13 @@ class VcsProxy(object):
         Git
     ]
 
-    def __init__(self, real):
-        # Check the real instance type
-        assert isinstance(real, tuple(self.VCS_HANDLERS))
+    def __init__(self, project_root, **init_kwargs):
+        self._data = {
+            'project_root': project_root,
+            'init_kwargs': init_kwargs,
+        }
 
-        # Store it
-        self._real = real
+        self._real = 'VcsProxy'
 
     @classmethod
     def init(cls, project_root, **init_kwargs):
@@ -24,13 +25,16 @@ class VcsProxy(object):
             :rtype: hammer.vcs.base.BaseVcs
         """
 
+        return VcsProxy(project_root=project_root, **init_kwargs)
+
+    @classmethod
+    def detect(cls, project_root, **init_kwargs):
         for handler_cls in cls.VCS_HANDLERS:
             res = handler_cls.detect(project_root, **init_kwargs)
 
             # Found a match
             if res:
-                # Construct a proxy instance and return it
-                return VcsProxy(handler_cls(project_root=project_root, **init_kwargs))
+                return handler_cls
 
         handlers = ', '.join([x.TAG for x in cls.VCS_HANDLERS])
         raise EnvironmentError('No suitable VCS type detected (tried %s)' % handlers)
@@ -40,10 +44,17 @@ class VcsProxy(object):
     # ============
 
     def __getattribute__(self, name):
-        if name == 'VCS_HANDLERS':
-            return object.__getattribute__(self, 'VCS_HANDLERS')
+        real = object.__getattribute__(self, "_real")
 
-        return getattr(object.__getattribute__(self, "_real"), name)
+        if real == 'VcsProxy':
+            data = object.__getattribute__(self, "_data")
+
+            cls = VcsProxy.detect(project_root=data['project_root'], **data['init_kwargs'])
+            real = cls(project_root=data['project_root'], **data['init_kwargs'])
+
+            self._real = real
+
+        return getattr(real, name)
 
     def __str__(self):  # pragma: no cover
         return str(object.__getattribute__(self, "_real"))
