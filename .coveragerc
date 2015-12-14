@@ -1,0 +1,10 @@
+[run]
+branch = True
+source =
+    hammer/
+
+omit =
+    *test*
+
+[html]
+directory = cover
