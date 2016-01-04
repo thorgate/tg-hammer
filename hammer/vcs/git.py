@@ -10,6 +10,11 @@ class Git(BaseVcs):
     TAG = 'git'
     NAME = 'Git'
 
+    def __init__(self, project_root, use_sudo=None, code_dir=None, **kwargs):
+        self._branch_cache = {}
+
+        super(Git, self).__init__(project_root, use_sudo, code_dir, **kwargs)
+
     def repo_url(self):
         with lcd(self.project_root):
             try:
@@ -53,7 +58,7 @@ class Git(BaseVcs):
     def get_branch(self, commit_id='HEAD', ambiguous=False):
         with cd(self.code_dir), hide('running'):
             try:
-                branch = self.remote_cmd('git symbolic-ref --short -q %s' % commit_id)
+                branch = self.remote_cmd('git symbolic-ref --short -q %s' % commit_id, silent=True)
 
             except SystemExit as e:
                 if e.code == 1:
@@ -78,14 +83,16 @@ class Git(BaseVcs):
                         candidate = candidate[7:]
                         valid_branches.append(candidate)
 
+                real_commit = None
+
                 # in some cases even the second command won't be
                 #  able to figure out the branch
                 if not valid_branches:
-                    valid_branches = self.git_what_branch(commit_id)
+                    valid_branches, real_commit = self.git_what_branch(commit_id)
 
                 if not valid_branches:
                     # No compatible branch found. Oh well lets just abort...
-                    abort('Could not figure out remote branch (for %s)' % commit_id)  # pragma: no cover
+                    abort('Could not figure out remote branch (for %s)' % real_commit or commit_id)  # pragma: no cover
 
                 elif len(valid_branches) > 1:  # pragma: no cover
                     if ambiguous:
@@ -93,7 +100,7 @@ class Git(BaseVcs):
 
                     # Ask the user which one is valid
                     print(colors.yellow('Could not automatically determine remote git branch '
-                                        '(for %s), please pick the correct value' % commit_id))
+                                        '(for %s), please pick the correct value' % real_commit or commit_id))
                     print('Candidates are (use 0 to abort): %s' % (
                         ', '.join(['%d: %s' % (i + 1, x) for i, x in enumerate(valid_branches)])
                     ))
@@ -112,9 +119,15 @@ class Git(BaseVcs):
                         abort('Cancel by user')
 
                     else:
+                        if real_commit:
+                            self._branch_cache[real_commit] = valid_branches[value - 1]
+
                         return valid_branches[value - 1]
 
                 else:
+                    if real_commit:
+                        self._branch_cache[real_commit] = valid_branches[0]
+
                     return valid_branches[0]
 
         return branch
@@ -130,23 +143,26 @@ class Git(BaseVcs):
         with cd(self.code_dir):
             self.remote_cmd('git checkout %s' % revision)
 
-    def get_all_branches(self, remote=True):
+    def get_all_branches(self, remote):
         with cd(self.code_dir):
-            all_branches = self.remote_cmd('git --no-pager branch%s --color=never' % ' -r' if remote else ' -a')
+            all_branches = self.remote_cmd('git --no-pager branch%s --color=never' % (' -r' if remote else ' -l'), silent=True)
             all_branches = [x.strip() for x in all_branches.splitlines(False)]
 
-            return set(list(map(self.normalize_branch, filter(lambda y: y, all_branches))))
+            return set(list(filter(lambda y: y, map(self.normalize_branch, all_branches))))
 
     def get_commit_id(self):
         with cd(self.code_dir):
-            return self.remote_cmd('git --no-pager log -n 1 --oneline --pretty=%h').strip()
+            return self.remote_cmd('git --no-pager log -n 1 --oneline --pretty=%h', silent=True).strip()
 
-    def git_what_branch(self, commit_id):
+    def git_what_branch(self, commit_id, remote=False):
         if commit_id.lower() == 'head':
             commit_id = self.get_commit_id()
 
+        if self._branch_cache.get(commit_id, None) is not None:
+            return [self._branch_cache[commit_id], ], commit_id
+
         with cd(self.code_dir):
-            all_branches = self.get_all_branches()
+            all_branches = self.get_all_branches(remote=remote)
             valid_branches = []
 
             for branch in all_branches:
@@ -155,7 +171,7 @@ class Git(BaseVcs):
                                                   '%(branch)s origin/%(branch)s --pretty=%%h | grep %(commit)s') % dict(
                         branch=branch,
                         commit=commit_id,
-                    ))
+                    ), silent=True)
 
                     if commit_log and commit_id in commit_log:  # pragma: no branch
                         valid_branches.append(branch)
@@ -167,18 +183,22 @@ class Git(BaseVcs):
                     else:
                         raise  # pragma: no cover
 
-        return valid_branches
+        return valid_branches, commit_id
 
     def deployment_list(self, revision=''):
         if not revision:
-            revision = 'origin/%s' % self.get_branch()
+            base_branch = self.get_branch()
+            revision = 'origin/%s' % base_branch
+
+        else:
+            base_branch = None
 
         with cd(self.code_dir), hide('running', 'stdout'):
             # First lets pull
             self.pull()
 
             revision_set = self.get_revset(' ', revision)
-            revisions = self.get_revset_log(revision_set)
+            revisions = self.get_revset_log(revision_set, base_branch=base_branch)
 
             if len(revisions) > 0:
                 # Target is forward of the current rev
@@ -186,7 +206,7 @@ class Git(BaseVcs):
 
             # Check if target is backwards of the current rev
             revision_set = self.get_revset(revision, ' ')
-            revisions = self.get_revset_log(revision_set)
+            revisions = self.get_revset_log(revision_set, base_branch=base_branch)
 
             if revisions:
                 return {'backwards': list(reversed(self.get_revisions(revisions))), 'revset': revision_set}
@@ -200,18 +220,18 @@ class Git(BaseVcs):
 
             return map(lambda x: x.replace('\t', ' '), result)
 
-    def get_revset_log(self, revs):
+    def get_revset_log(self, revs, base_branch=None):
         with cd(self.code_dir):
             result = self.remote_cmd("git --no-pager log %s --oneline --format='%%h %%(branch)s %%an <%%ae> %%s'" % revs).strip()
 
             if result:
                 result = result.split('\n')
 
-                return map(self.log_add_branch, filter(lambda y: y, [x.strip() for x in result]))
+                return map(lambda z: self.log_add_branch(z, base_branch=base_branch), filter(lambda y: y, [x.strip() for x in result]))
 
             return []
 
-    def log_add_branch(self, line, needle='branch'):
+    def log_add_branch(self, line, needle='branch', base_branch=None):
         if not line:
             return line  # pragma: no cover
 
@@ -220,7 +240,7 @@ class Git(BaseVcs):
         if not commit_hash:
             return line  # pragma: no cover
 
-        return line % {needle: self.get_branch(commit_hash, ambiguous=True)}
+        return line % {needle: base_branch if base_branch is not None else self.get_branch(commit_hash, ambiguous=True)}
 
     @classmethod
     def get_revset(cls, x, y):
@@ -238,4 +258,7 @@ class Git(BaseVcs):
 
     @staticmethod
     def normalize_branch(branch):
+        if not branch or 'detached from' in branch:
+            return None
+
         return branch.replace('origin/', '').replace('HEAD', '').replace('->', '').strip('/').strip()

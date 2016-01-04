@@ -280,8 +280,8 @@ def test_stable_branch(repo, monkeypatch):
     #  if not merged with fast-forward
     if repo.vcs_type == 'git':
         expected_forwards = [
-            '%s master|stable %s dogs.png' % (repo.commit_hash['dogs.png'], repo.user_full),
-            '%s master %s world is kind' % (repo.commit_hash['world is kind'], repo.user_full),
+            '%s stable %s dogs.png' % (repo.commit_hash['dogs.png'], repo.user_full),
+            '%s stable %s world is kind' % (repo.commit_hash['world is kind'], repo.user_full),
         ] + expected_forwards
 
     assert result['forwards'] == expected_forwards

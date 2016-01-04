@@ -1,6 +1,6 @@
 import re
 
-from fabric.api import sudo, run, env
+from fabric.api import sudo, run, env, hide
 
 
 class BaseVcs(object):
@@ -95,6 +95,16 @@ class BaseVcs(object):
         raise NotImplementedError  # pragma: no cover
 
     def remote_cmd(self, *args, **kwargs):
+        silent = kwargs.pop('silent', False)
+
+        if silent:
+            with hide('running', 'stderr', 'stdout'):
+                return self._remote_cmd(*args, **kwargs)
+
+        else:
+            return self._remote_cmd(*args, **kwargs)
+
+    def _remote_cmd(self, *args, **kwargs):
         if not self.use_sudo:  # pragma: no cover
             return run(*args, **kwargs)
 
