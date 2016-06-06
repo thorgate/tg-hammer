@@ -13,7 +13,7 @@ Then use it in your fabfile::
 
     # Provide configuration to the VCS logic
     # Note: You can omit both of these keys when you
-    #       want them to be retrieved from fabrics `env`
+    #       want them to be retrieved from fabrics `env` dictionary
     vcs_config = {
         'use_sudo': False,              # Set to True if your target machine requires elevated privileges when running vcs commands
         'code_dir': '/srv/project',     # Directory on the target machine that will be operated on
