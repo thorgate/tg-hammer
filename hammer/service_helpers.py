@@ -15,7 +15,7 @@ DAEMON_TYPES = {
     },
     'supervisor': {
         'daemon_cmd': 'supervisorctl %(action)s %(name)s',
-        'target_dir': ('supervisor_target_dir', '/etc/supervisord/conf.d/'),
+        'target_dir': '/etc/supervisord/conf.d/',
         'file_extension': 'conf',
     },
     'upstart': {
@@ -35,8 +35,10 @@ def get_service_daemon():
     daemon_conf = copy(DAEMON_TYPES[env.service_daemon])
 
     # Support loading target_dir from env
-    if isinstance(daemon_conf['target_dir'], tuple):
-        daemon_conf['target_dir'] = getattr(env, daemon_conf['target_dir'][0], daemon_conf['target_dir'][1])
+    daemon_conf['target_dir'] = getattr(env, 'service_daemon_target_dir', daemon_conf['target_dir'])
+
+    if not daemon_conf['target_dir']:
+        abort('`env.service_daemon_target_dir` must not be empty')
 
     return env.service_daemon, daemon_conf
 
@@ -46,9 +48,12 @@ def install_services(services):
 
     :param services: List of services to install where each item is a tuple with the signature: ``(target_name, file_data)``
 
+    **Note:**
+        One can overwrite the default target dir via ``env.service_daemon_target_dir``
+
     **Warning:**
-        For supervisor the default include dir is `/etc/supervisord/conf.d/` and it can be overwritten via
-        `env.supervisor_target_dir`. One must ensure that directory is included in the global supervisor configuration
+        For supervisor the default include dir is `/etc/supervisord/conf.d/`, this directory must be included
+        in the global supervisor configuration.
     """
 
     daemon_type, daemon_conf = get_service_daemon()
@@ -67,7 +72,7 @@ def install_services(services):
         manage_service('systemctl', 'daemon-reload')
 
         # Ensure services are started on startup
-        manage_service([x[1] for x in services], 'enable')
+        manage_service([target_name for target_name, file_data in services], 'enable')
 
 
 def install_services_cp(services):
@@ -80,9 +85,12 @@ def install_services_cp(services):
     -  ``${DAEMON_TYPE}``: Replaced with the detected daemon type (see `DAEMON_TYPES`)
     -  ``${DAEMON_FILE_EXTENSION}``: Replaced with the `file_extension` value for the detected daemon type (see `DAEMON_TYPES`)
 
+    **Note:**
+        One can overwrite the default target dir via ``env.service_daemon_target_dir``
+
     **Warning:**
-        For supervisor the default include dir is `/etc/supervisord/conf.d/` and it can be overwritten via
-        `env.supervisor_target_dir`. One must ensure that directory is included in the global supervisor configuration
+        For supervisor the default include dir is `/etc/supervisord/conf.d/`, this directory must be included
+        in the global supervisor configuration.
     """
 
     prepared_services = []

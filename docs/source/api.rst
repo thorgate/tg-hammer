@@ -22,6 +22,8 @@ service_helpers
    - systemd
    - supervisor
 
+   The daemon type can specified via: ``env.service_daemon``
+
 .. autofunction:: install_services_cp
 .. autofunction:: install_services
 .. autofunction:: manage_service
