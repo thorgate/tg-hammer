@@ -8,6 +8,7 @@ on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 # -- General configuration ------------------------------------------------
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.viewcode',
 ]
 templates_path = ['_templates']
 source_suffix = '.rst'

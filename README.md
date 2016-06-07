@@ -13,14 +13,22 @@ Install tg-hammer::
 
 ## Features
 
+See the documentation for detailed information.
+https://tg-hammer.readthedocs.org
+
+### VCS
+
 Hammer provides unified helper api for both git and Mercurial
 based projects. It can automatically detect which version control
 system to use based on the current project (by inspecting project_root).
 
-See the documentation for detailed information.
+### Services
 
-https://tg-hammer.readthedocs.org
+Hammer contains management helpers for the following unix service daemon utilities:
 
+ - upstart
+ - systemd
+ - supervisor
 
 ## Testing
 
