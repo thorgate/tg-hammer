@@ -1,7 +1,7 @@
 import os
 
 from fabric import colors
-from fabric.api import cd, hide, abort, local, lcd
+from fabric.api import cd, hide, abort, local, lcd, prompt
 
 from .base import BaseVcs
 
@@ -16,9 +16,46 @@ class Git(BaseVcs):
         super(Git, self).__init__(project_root, use_sudo, code_dir, **kwargs)
 
     def repo_url(self):
-        with lcd(self.project_root):
+        """Get remote url of the current repository"""
+
+        # Get all remotes
+        remotes = local("git remote -v | awk '{split($0, a); print a[1]}' | awk '!seen[$0]++'", capture=True).splitlines()
+
+        if not remotes:
+            return None
+
+        if len(remotes) > 1:
+            remotes = dict([(remote_name, self._get_remote_url(remote_name)) for remote_name in remotes])
+
+            valid_choices = ['abort', ] + list(remotes.keys())
+
+            message = "%(question)s [%(remotes)s, Use `%(abort)s` to cancel]:" % {
+                'abort': colors.yellow('abort'),
+                'question': colors.red("Which remote to use?", bold=True),
+                'remotes': ', '.join([colors.green(x) for x in remotes.keys()]),
+            }
+
+            def validate_choice(val):
+                if val in valid_choices:
+                    return val
+
+                else:
+                    raise Exception('Please select a valid value')
+
+            selected = prompt(message, validate=validate_choice)
+
+            if selected == 'abort':
+                abort('Aborted by user')
+
+            return remotes[selected]
+
+        else:
+            return self._get_remote_url(remotes[0]) or None
+
+    def _get_remote_url(self, remote_name):
+        with lcd(self.project_root), hide('running'):
             try:
-                result = local('git config --get remote.origin.url', capture=True)
+                result = local('git config --get remote.%s.url' % remote_name, capture=True)
 
             except SystemExit as e:
                 if e.code == 1:
@@ -27,7 +64,7 @@ class Git(BaseVcs):
                 else:
                     raise  # pragma: no cover
 
-            return result or None
+        return result or None
 
     def clone(self, revision=None):
         repo_url = self.repo_url()

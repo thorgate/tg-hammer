@@ -66,6 +66,7 @@ def install_services(services):
     if daemon_type == 'supervisor':
         # Ensure configuration files are reloaded
         manage_service('supervisorctl', 'reread')
+        manage_service('supervisorctl', 'update')
 
     elif daemon_type == 'systemd':
         # Ensure configuration files are reloaded
