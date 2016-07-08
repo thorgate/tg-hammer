@@ -16,7 +16,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'tg-hammer'
-copyright = u'2015, Thorgate'
+copyright = u'2015-present, Thorgate'
 author = u'Thorgate'
 version = hammer_version
 release = hammer_version
