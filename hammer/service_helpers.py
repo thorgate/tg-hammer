@@ -70,7 +70,7 @@ def install_services(services):
 
     elif daemon_type == 'systemd':
         # Ensure configuration files are reloaded
-        manage_service('systemctl', 'daemon-reload')
+        manage_service('', 'daemon-reload')
 
         # Ensure services are started on startup
         manage_service([target_name for target_name, file_data in services], 'enable')
