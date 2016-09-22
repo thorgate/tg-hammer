@@ -195,7 +195,7 @@ class Git(BaseVcs):
                 try:
                     self.remote_cmd('git show {}'.format(revision))
                     has_revision = True
-                except SystemExit as e:
+                except SystemExit:
                     abort(colors.red('The argument provided does not match any commit or branch in the repository.'))
 
             if has_revision:
