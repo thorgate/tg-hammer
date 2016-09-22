@@ -60,6 +60,9 @@ class Mercurial(BaseVcs):
     def update(self, revision=''):
         # Default revision to empty string if it is None
         revision = revision or ''
+
+        self.pull()
+
         with cd(self.code_dir):
             self.remote_cmd('hg update %s' % revision)
 

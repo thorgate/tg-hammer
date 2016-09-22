@@ -1,4 +1,5 @@
 import os
+import pytest
 
 
 def test_fixture_correct_data(repo):
@@ -100,9 +101,6 @@ def test_vcs_deploy(repo, monkeypatch):
     # Remember the version info
     version_info = list(obj.version())
 
-    # Run pull
-    obj.pull()
-
     # The version info should still be same
     assert version_info == list(obj.version())
 
@@ -128,9 +126,6 @@ def test_vcs_deploy(repo, monkeypatch):
 
     # Push to remote
     repo.push()
-
-    # Run pull
-    obj.pull()
 
     # The version info should still be same
     assert list(obj.version()) == [
@@ -384,3 +379,127 @@ def test_stable_branch(repo, monkeypatch):
         merge_msg,
         repo.user_full,
     ]
+
+
+def test_vcs_deploy_with_branchname(repo, monkeypatch):
+    if repo.vcs_type == 'git':
+        branch_name = 'featureXXX/YYY/ZZZ'
+
+        # Make another commit
+        repo.store_commit_hash('7.txt', branch=branch_name)
+
+        # test that it was stored
+        assert repo.commit_hash.get('7.txt', None)
+
+        # Push to remote
+        repo.push(branch=branch_name)
+
+        # set host string
+        monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
+        monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+
+        # Run deploy
+        obj = repo.get_vcs()
+
+        # Run deploy with branch name
+        obj.update(revision=branch_name)
+
+        # The version info should be correct
+        assert list(obj.version()) == [
+            repo.commit_hash['7.txt'],
+            branch_name,
+            '7.txt',
+            repo.user_full,
+        ]
+
+        # Also test that we get correct branch
+        assert obj.get_branch() == branch_name
+
+        # Clean up this test (somewhat)
+        obj.update(repo.default_branch)
+
+
+def test_vcs_deploy_with_wrong_branchname_or_revision(repo, monkeypatch):
+    if repo.vcs_type == 'git':
+        # set host string
+        monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
+        monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+
+        # Run deploy
+        obj = repo.get_vcs()
+
+        # Run deploy with branch that does not exist in origin.
+        with pytest.raises(SystemExit) as e:
+            obj.update(revision='feature-branch/does-not-exist-in-remove-server')
+
+        assert '1' in str(e.value)
+
+        # Run deploy with a revision hash that does not exist in the repo.
+        with pytest.raises(SystemExit) as e:
+            obj.update(revision='4c92374f88ad10bf4b658355d2784540e4192927')
+
+        assert '1' in str(e.value)
+
+
+def test_vcs_deployment_list(repo, monkeypatch):
+    if repo.vcs_type == 'git':
+        branch_name = 'top_secret'
+
+        # Make a commit to top_secret
+        repo.store_commit_hash('8.txt', branch=branch_name)
+
+        # Test that it was stored
+        assert repo.commit_hash.get('8.txt', None)
+
+        # Push to remote
+        repo.push(branch=branch_name)
+
+        # Make a commit to master
+        repo.store_commit_hash('9.txt', branch=['master'])
+
+        # Test that it was stored
+        assert repo.commit_hash.get('9.txt', None)
+
+        # Push to remote
+        repo.push(branch='master')
+
+        # set host string
+        monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
+        monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+        obj = repo.get_vcs()
+
+        deployment_list = obj.deployment_list()
+
+        assert 'forwards' in deployment_list
+        assert 'revset' in deployment_list
+
+        inner_list = deployment_list['forwards']
+
+        list_without_hashes = [i[8:] for i in inner_list]
+
+        assert list_without_hashes == [
+            'master Testing user <test@test.sdf> 5.txt',
+            'master Testing user <test@test.sdf> 6.txt',
+            'master Testing user <test@test.sdf> dogs.png',
+            'master Testing user <test@test.sdf> world is kind',
+            'master Testing user <test@test.sdf> 9.txt'
+        ]
+
+        obj.update(branch_name)
+
+        # Make a commit to top_secret
+        repo.store_commit_hash('10.txt', branch=[branch_name])
+
+        # Push to top_secret
+        repo.push(branch=branch_name)
+
+        deployment_list = obj.deployment_list()
+
+        assert 'forwards' in deployment_list
+        assert 'revset' in deployment_list
+
+        inner_list = deployment_list['forwards']
+
+        list_without_hashes = [i[8:] for i in inner_list]
+
+        assert list_without_hashes == ['{} Testing user <test@test.sdf> 10.txt'.format(branch_name)]

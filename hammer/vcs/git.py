@@ -178,7 +178,28 @@ class Git(BaseVcs):
             revision = 'origin/%s' % self.get_branch()
 
         with cd(self.code_dir):
-            self.remote_cmd('git checkout %s' % revision)
+            self.pull()
+
+            if revision.startswith('origin/'):
+                revision_without_origin = revision[len('origin/'):]
+            else:
+                revision_without_origin = revision
+
+            # # Returns 1 if this revision (branch) exists on the remote repo or 0 if it does not.
+            cmd = 'git ls-remote --heads {repo_url} {revision} | wc -l'.format(repo_url=self.repo_url(),
+                                                                               revision=revision_without_origin)
+
+            has_revision = self.remote_cmd(cmd)
+
+            if not int(has_revision):
+                try:
+                    self.remote_cmd('git show {}'.format(revision))
+                    has_revision = True
+                except SystemExit:
+                    abort(colors.red('The argument provided does not match any commit or branch in the repository.'))
+
+            if has_revision:
+                self.remote_cmd('git checkout %s' % revision)
 
     def get_all_branches(self, remote):
         with cd(self.code_dir):
