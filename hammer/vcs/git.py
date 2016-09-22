@@ -180,9 +180,14 @@ class Git(BaseVcs):
         with cd(self.code_dir):
             self.pull()
 
+            if revision.startswith('origin/'):
+                revision_without_origin = revision[len('origin/'):]
+            else:
+                revision_without_origin = revision
+
             # # Returns 1 if this revision (branch) exists on the remote repo or 0 if it does not.
             cmd = 'git ls-remote --heads {repo_url} {revision} | wc -l'.format(repo_url=self.repo_url(),
-                                                                               revision=revision.split('/')[-1])
+                                                                               revision=revision_without_origin)
 
             has_revision = self.remote_cmd(cmd)
 

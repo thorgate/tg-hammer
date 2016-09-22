@@ -383,7 +383,7 @@ def test_stable_branch(repo, monkeypatch):
 
 def test_vcs_deploy_with_branchname(repo, monkeypatch):
     if repo.vcs_type == 'git':
-        branch_name = 'featureXXX'
+        branch_name = 'featureXXX/YYY/ZZZ'
 
         # Make another commit
         repo.store_commit_hash('7.txt', branch=branch_name)
