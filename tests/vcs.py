@@ -429,16 +429,12 @@ def test_vcs_deploy_with_wrong_branchname_or_revision(repo, monkeypatch):
         obj = repo.get_vcs()
 
         # Run deploy with branch that does not exist in origin.
-        with pytest.raises(SystemExit) as e:
+        with pytest.raises(SystemExit):
             obj.update(revision='feature-branch/does-not-exist-in-remove-server')
 
-        assert '1' in str(e.value)
-
         # Run deploy with a revision hash that does not exist in the repo.
-        with pytest.raises(SystemExit) as e:
+        with pytest.raises(SystemExit):
             obj.update(revision='4c92374f88ad10bf4b658355d2784540e4192927')
-
-        assert '1' in str(e.value)
 
 
 def test_vcs_deployment_list(repo, monkeypatch):
@@ -503,3 +499,43 @@ def test_vcs_deployment_list(repo, monkeypatch):
         list_without_hashes = [i[8:] for i in inner_list]
 
         assert list_without_hashes == ['{} Testing user <test@test.sdf> 10.txt'.format(branch_name)]
+
+
+def test_deployment_list_revision_flag(repo, monkeypatch):
+    # set host string
+    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
+    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+    obj = repo.get_vcs()
+
+    evil_branch = 'feature-branch/does-not-exist-in-remove-server'
+
+    # Test if adding a commit_id that does exist fails appropriately.
+    with pytest.raises(SystemExit):
+        obj.deployment_list(revision='4c92374f88ad10bf4b658355d2784540e4192927')
+
+    # Test if adding a commit_id that does exist in the repo fails appropriately.
+    with pytest.raises(SystemExit):
+        obj.deployment_list(revision=evil_branch)
+
+    # get reverse log
+    target_version = repo.commit_hash['message of stable-2']
+    obj.deployment_list(target_version)
+
+    # Add the evil branch to the repo
+    repo.store_commit_hash('11.txt', branch=evil_branch)
+    repo.push(branch=evil_branch)
+
+    deployment_list = obj.deployment_list(revision=evil_branch)
+    assert 'forwards' in deployment_list
+    assert 'revset' in deployment_list
+
+    forwards_list = deployment_list['forwards']
+    forwards_list_without_hashes = [i[8:] for i in forwards_list]
+
+    assert forwards_list_without_hashes == [
+        'top_secret Testing user <test@test.sdf> 10.txt',
+        'feature-branch/does-not-exist-in-remove-server Testing user <test@test.sdf> 11.txt',
+    ]
+
+    revset = deployment_list['revset']
+    assert revset == ' ..origin/feature-branch/does-not-exist-in-remove-server'
