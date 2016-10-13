@@ -127,6 +127,10 @@ class Git(BaseVcs):
                 if not valid_branches:
                     valid_branches, real_commit = self.git_what_branch(commit_id)
 
+                    # We now include remote branches as well because this commit hash did not exist in local branches.
+                    if not valid_branches:
+                        valid_branches, real_commit = self.git_what_branch(commit_id, remote=True)
+
                 if not valid_branches:
                     # No compatible branch found. Oh well lets just abort...
                     abort('Could not figure out remote branch (for %s)' % real_commit or commit_id)  # pragma: no cover
@@ -173,6 +177,31 @@ class Git(BaseVcs):
         with cd(self.code_dir):
             self.remote_cmd('git fetch origin')
 
+    def has_revision(self, revision):
+        if revision.startswith('origin/'):
+            revision_without_origin = revision[len('origin/'):]
+        else:
+            revision_without_origin = revision
+
+        # Returns 1 if this revision (branch) exists on the remote repo or 0 if it does not.
+        cmd = 'git ls-remote --heads {repo_url} {revision} | wc -l'.format(repo_url=self.repo_url(),
+                                                                           revision=revision_without_origin)
+
+        has_branch = self.remote_cmd(cmd)
+
+        if not int(has_branch):
+            try:
+                self.remote_cmd('git show {}'.format(revision))
+                has_branch = True
+            except SystemExit:
+                return False
+
+        return has_branch
+
+    @staticmethod
+    def _no_revision_error(revision):
+        return 'This revision or commit_id does not exist in the repo: {}'.format(revision)
+
     def update(self, revision=''):
         if not revision:
             revision = 'origin/%s' % self.get_branch()
@@ -180,26 +209,10 @@ class Git(BaseVcs):
         with cd(self.code_dir):
             self.pull()
 
-            if revision.startswith('origin/'):
-                revision_without_origin = revision[len('origin/'):]
-            else:
-                revision_without_origin = revision
-
-            # # Returns 1 if this revision (branch) exists on the remote repo or 0 if it does not.
-            cmd = 'git ls-remote --heads {repo_url} {revision} | wc -l'.format(repo_url=self.repo_url(),
-                                                                               revision=revision_without_origin)
-
-            has_revision = self.remote_cmd(cmd)
-
-            if not int(has_revision):
-                try:
-                    self.remote_cmd('git show {}'.format(revision))
-                    has_revision = True
-                except SystemExit:
-                    abort(colors.red('The argument provided does not match any commit or branch in the repository.'))
-
-            if has_revision:
+            if self.has_revision(revision):
                 self.remote_cmd('git checkout %s' % revision)
+            else:
+                abort(colors.red(self._no_revision_error(revision)))
 
     def get_all_branches(self, remote):
         with cd(self.code_dir):
@@ -244,19 +257,29 @@ class Git(BaseVcs):
         return valid_branches, commit_id
 
     def deployment_list(self, revision=''):
-        if not revision:
-            base_branch = self.get_branch()
-            revision = 'origin/%s' % base_branch
-
-        else:
-            base_branch = None
-
         with cd(self.code_dir), hide('running', 'stdout'):
             # First lets pull
             self.pull()
 
+            if len(revision) > 0 and not self.has_revision(revision):
+                abort(colors.red(self._no_revision_error(revision)))
+
+            base_branch = None
+            if len(revision) == 0:
+                base_branch = self.get_branch()
+                revision = 'origin/%s' % base_branch
+
             revision_set = self.get_revset(' ', revision)
-            revisions = self.get_revset_log(revision_set, base_branch=base_branch)
+
+            try:
+                revisions = self.get_revset_log(revision_set, base_branch=base_branch)
+            except SystemExit:
+
+                # The above command failed because this revision is not present in the local repo.
+                # Now we should use the remote branch to base our revision set off of.
+                revision = 'origin/{}'.format(revision)
+                revision_set = self.get_revset(' ', revision)
+                revisions = self.get_revset_log(revision_set, base_branch=base_branch)
 
             if len(revisions) > 0:
                 # Target is forward of the current rev
