@@ -513,6 +513,14 @@ def test_deployment_list_revision_flag(repo, monkeypatch):
     with pytest.raises(SystemExit):
         obj.deployment_list(revision='4c92374f88ad10bf4b658355d2784540e4192927')
 
+    # Test if adding a short commit_id fails appropriately.
+    with pytest.raises(SystemExit):
+        obj.deployment_list(revision='4c9237')
+
+    # Test that deploying a branch that starts with origin fails appropriately.
+    with pytest.raises(SystemExit):
+        obj.deployment_list(revision='origin/{}'.format(evil_branch))
+
     # Test if adding a commit_id that does exist in the repo fails appropriately.
     with pytest.raises(SystemExit):
         obj.deployment_list(revision=evil_branch)

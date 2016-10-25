@@ -86,7 +86,7 @@ class Git(BaseVcs):
             sep = ':|:|:'
 
             commit_id, message, author = self.remote_cmd(("git --no-pager log -n 1 --oneline "
-                                                         "--format='%%h%(sep)s%%s%(sep)s%%an <%%ae>'") % dict(sep=sep)).split(sep)
+                                                          "--format='%%h%(sep)s%%s%(sep)s%%an <%%ae>'") % dict(sep=sep)).split(sep)
 
             branch = self.get_branch('HEAD')
 
@@ -202,11 +202,23 @@ class Git(BaseVcs):
     def _no_revision_error(revision):
         return 'This revision or commit_id does not exist in the repo: {}'.format(revision)
 
+    @staticmethod
+    def _no_remote_revision_allowed_error(revision):
+        return 'One cannot deploy a branch that starts with "origin/". Branch given: {}'.format(revision)
+
+    @staticmethod
+    def _no_revisions_in_remote_branch_error(revision):
+        return 'No revisions were found in the remote repository for the branch given: {}'.format(revision)
+
+    @staticmethod
+    def _commit_id_is_too_short(revision):
+        return 'The commit id given is too short: {}'.format(revision)
+
     def update(self, revision=''):
         if not revision:
             revision = 'origin/%s' % self.get_branch()
 
-        with cd(self.code_dir):
+        with cd(self.code_dir), hide('running', 'stdout'):
             self.pull()
 
             if self.has_revision(revision):
@@ -257,40 +269,67 @@ class Git(BaseVcs):
         return valid_branches, commit_id
 
     def deployment_list(self, revision=''):
+        if revision.startswith('origin/'):
+            abort(colors.red(self._no_remote_revision_allowed_error(revision)))
+
+        original_revision = revision
+
         with cd(self.code_dir), hide('running', 'stdout'):
             # First lets pull
             self.pull()
 
-            if len(revision) > 0 and not self.has_revision(revision):
-                abort(colors.red(self._no_revision_error(revision)))
-
             base_branch = None
-            if len(revision) == 0:
+            on_new_branch = False
+            if len(revision) > 0:
+                try:
+                    int(revision, 16)
+                    assert len(revision) > 6
+                except ValueError:
+
+                    # Make sure that this branch exists in the remote repo.
+                    if not self.has_revision(revision):
+                        abort(colors.red(self._no_revision_error(revision)))
+
+                    # Now we need to make this branch locally so that the branch searching alg. works.
+                    on_new_branch = True
+                    cmd = 'git checkout -b {}'.format(revision)
+                    msg_tmpl = 'Not a commit ID and the branch exists remotely. ' \
+                               'Now creating this branch locally: {} with this command: {}'
+                    print(colors.yellow(msg_tmpl.format(revision, cmd)))
+                    self.remote_cmd(cmd)
+                    revision = 'origin/{}'.format(revision)
+
+                except AssertionError:
+                    abort(colors.red(self._commit_id_is_too_short(revision)))
+
+            # If no revision was given we should use the local branch.
+            else:
                 base_branch = self.get_branch()
-                revision = 'origin/%s' % base_branch
+                revision = 'origin/{}'.format(base_branch)
 
             revision_set = self.get_revset(' ', revision)
-
-            try:
-                revisions = self.get_revset_log(revision_set, base_branch=base_branch)
-            except SystemExit:
-
-                # The above command failed because this revision is not present in the local repo.
-                # Now we should use the remote branch to base our revision set off of.
-                revision = 'origin/{}'.format(revision)
-                revision_set = self.get_revset(' ', revision)
-                revisions = self.get_revset_log(revision_set, base_branch=base_branch)
-
-            if len(revisions) > 0:
-                # Target is forward of the current rev
-                return {'forwards': self.get_revisions(revisions), 'revset': revision_set}
-
-            # Check if target is backwards of the current rev
-            revision_set = self.get_revset(revision, ' ')
             revisions = self.get_revset_log(revision_set, base_branch=base_branch)
 
+            if len(revisions) > 0:
+                # Target is forward of the current revision.
+                return {'forwards': self.get_revisions(revisions), 'revset': revision_set}
+
+            # Check if target is backwards from the current revision:
+            revision_set = self.get_revset(revision, ' ')
+            revisions = self.get_revset_log(revision_set, base_branch=base_branch)
             if revisions:
                 return {'backwards': list(reversed(self.get_revisions(revisions))), 'revset': revision_set}
+
+            # If we created a new branch from the revision information supplied, but no revisions were found,
+            # then we need to remove this branch and abort.
+            elif on_new_branch:
+                cmd = 'git checkout {}'.format(original_revision)
+
+                msg_tmpl = 'Removing new branch because it does not contain revisions in the remote repo. cmd: {}'
+                print(colors.yellow(msg_tmpl.format(cmd)))
+
+                self.remote_cmd(cmd)
+                abort(colors.red(self._no_revisions_in_remote_branch_error(revision)))
 
             else:
                 return {'message': "Already at target revision"}
