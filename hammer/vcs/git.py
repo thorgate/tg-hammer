@@ -269,6 +269,9 @@ class Git(BaseVcs):
         return valid_branches, commit_id
 
     def deployment_list(self, revision=''):
+        if revision is None:
+            revision = ''
+
         if revision.startswith('origin/'):
             abort(colors.red(self._no_remote_revision_allowed_error(revision)))
 
@@ -280,12 +283,19 @@ class Git(BaseVcs):
 
             base_branch = None
             on_new_branch = False
+
             if len(revision) > 0:
+
+                # Check if this is a commit_id or a branch name.
+                # A valid branch name raises a ValueError.
                 try:
                     int(revision, 16)
                     assert len(revision) > 6
-                except ValueError:
 
+                except AssertionError:
+                    abort(colors.red(self._commit_id_is_too_short(revision)))
+
+                except ValueError:
                     # Make sure that this branch exists in the remote repo.
                     if not self.has_revision(revision):
                         abort(colors.red(self._no_revision_error(revision)))
@@ -298,9 +308,6 @@ class Git(BaseVcs):
                     print(colors.yellow(msg_tmpl.format(revision, cmd)))
                     self.remote_cmd(cmd)
                     revision = 'origin/{}'.format(revision)
-
-                except AssertionError:
-                    abort(colors.red(self._commit_id_is_too_short(revision)))
 
             # If no revision was given we should use the local branch.
             else:
