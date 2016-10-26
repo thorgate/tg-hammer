@@ -177,14 +177,19 @@ class Git(BaseVcs):
         with cd(self.code_dir):
             self.remote_cmd('git fetch origin')
 
-    def has_revision(self, revision):
+    def has_revision(self, revision, locally=False):
         if revision.startswith('origin/'):
             revision_without_origin = revision[len('origin/'):]
         else:
             revision_without_origin = revision
 
+        if locally:
+            repo_url = '.'
+        else:
+            repo_url = self.repo_url()
+
         # Returns 1 if this revision (branch) exists on the remote repo or 0 if it does not.
-        cmd = 'git ls-remote --heads {repo_url} {revision} | wc -l'.format(repo_url=self.repo_url(),
+        cmd = 'git ls-remote --heads {repo_url} {revision} | wc -l'.format(repo_url=repo_url,
                                                                            revision=revision_without_origin)
 
         has_branch = self.remote_cmd(cmd)
@@ -300,14 +305,16 @@ class Git(BaseVcs):
                     if not self.has_revision(revision):
                         abort(colors.red(self._no_revision_error(revision)))
 
-                    # Now we need to make this branch locally so that the branch searching alg. works.
-                    on_new_branch = True
-                    cmd = 'git checkout -b {}'.format(revision)
-                    msg_tmpl = 'Not a commit ID and the branch exists remotely. ' \
-                               'Now creating this branch locally: {} with this command: {}'
-                    print(colors.yellow(msg_tmpl.format(revision, cmd)))
-                    self.remote_cmd(cmd)
-                    revision = 'origin/{}'.format(revision)
+                    # If this branch does not exist locally, we need to
+                    # create it so that the branch searching alg. works.
+                    if not self.has_revision(revision, locally=True):
+                        on_new_branch = True
+                        cmd = 'git checkout -b {}'.format(revision)
+                        msg_tmpl = 'Not a commit ID and the branch exists remotely. ' \
+                                   'Now creating this branch locally: {} with this command: {}'
+                        print(colors.yellow(msg_tmpl.format(revision, cmd)))
+                        self.remote_cmd(cmd)
+                        revision = 'origin/{}'.format(revision)
 
             # If no revision was given we should use the local branch.
             else:

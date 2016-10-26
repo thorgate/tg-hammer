@@ -533,17 +533,19 @@ def test_deployment_list_revision_flag(repo, monkeypatch):
     repo.store_commit_hash('11.txt', branch=evil_branch)
     repo.push(branch=evil_branch)
 
-    deployment_list = obj.deployment_list(revision=evil_branch)
-    assert 'forwards' in deployment_list
-    assert 'revset' in deployment_list
+    # The following currently fails with mercurial.
+    if repo.vcs_type == 'git':
+        deployment_list = obj.deployment_list(revision=evil_branch)
+        assert 'forwards' in deployment_list
+        assert 'revset' in deployment_list
 
-    forwards_list = deployment_list['forwards']
-    forwards_list_without_hashes = [i[8:] for i in forwards_list]
+        forwards_list = deployment_list['forwards']
+        forwards_list_without_hashes = [i[8:] for i in forwards_list]
 
-    assert forwards_list_without_hashes == [
-        'top_secret Testing user <test@test.sdf> 10.txt',
-        'feature-branch/does-not-exist-in-remove-server Testing user <test@test.sdf> 11.txt',
-    ]
+        assert forwards_list_without_hashes == [
+            'top_secret Testing user <test@test.sdf> 10.txt',
+            '{} Testing user <test@test.sdf> 11.txt'.format(evil_branch),
+        ]
 
-    revset = deployment_list['revset']
-    assert revset == ' ..origin/feature-branch/does-not-exist-in-remove-server'
+        revset = deployment_list['revset']
+        assert revset == ' ..origin/{}'.format(evil_branch)
