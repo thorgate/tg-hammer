@@ -332,8 +332,6 @@ class Git(BaseVcs):
         if revision.startswith('origin/'):
             abort(colors.red(self._no_remote_revision_allowed_error(revision)))
 
-        original_revision = revision
-
         with cd(self.code_dir), hide('running', 'stdout'):
             # First lets pull
             self.pull()
@@ -364,7 +362,7 @@ class Git(BaseVcs):
                     # create it so that the branch searching alg. works.
                     if not self.has_revision(revision, locally=True):
                         on_new_branch = True
-                        cmd = 'git checkout -b {}'.format(revision)
+                        cmd = 'git fetch origin {0}:{0}'.format(revision)
                         msg_tmpl = 'Not a commit ID and the branch exists remotely. ' \
                                    'Now creating this branch locally: {} with this command: {}'
                         print(colors.yellow(msg_tmpl.format(revision, cmd)))
@@ -398,18 +396,6 @@ class Git(BaseVcs):
 
             if revisions:
                 return {'backwards': list(reversed(self.get_revisions(revisions))), 'revset': revision_set}
-
-            # If we created a new branch from the revision information supplied, but no revisions were found,
-            # then we need to remove this branch and abort.
-            elif on_new_branch:
-                cmd = 'git checkout {}'.format(original_revision)
-
-                msg_tmpl = 'Removing new branch because it does not contain revisions in the remote repo. cmd: {}'
-                print(colors.yellow(msg_tmpl.format(cmd)))
-
-                self.remote_cmd(cmd)
-                abort(colors.red(self._no_revisions_in_remote_branch_error(revision)))
-
             else:
                 return {'message': "Already at target revision"}
 
