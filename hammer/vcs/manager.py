@@ -54,6 +54,9 @@ class VcsProxy(object):
 
             self._real = real
 
+        if name == '_real':
+            return real
+
         return getattr(real, name)
 
     def __str__(self):  # pragma: no cover
