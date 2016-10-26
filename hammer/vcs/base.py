@@ -99,6 +99,8 @@ class BaseVcs(object):
 
         if silent:
             with hide('running', 'stderr', 'stdout'):
+                kwargs['quiet'] = True
+
                 return self._remote_cmd(*args, **kwargs)
 
         else:
