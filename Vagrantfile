@@ -17,7 +17,7 @@ Vagrant.configure(2) do |config|
       grep -q -F 'PubkeyAuthentication yes' /etc/ssh/sshd_config || echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config
       /etc/init.d/ssh restart
 
-      add-apt-repository -y ppa:tortoisehg-ppa/releases
+      add-apt-repository -y ppa:mercurial-ppa/releases
       apt-get update
       apt-get install -y g++ build-essential
       apt-get install -y gettext curl git nano
@@ -95,7 +95,7 @@ Vagrant.configure(2) do |config|
       grep -q -F 'PubkeyAuthentication yes' /etc/ssh/sshd_config || echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config
       /etc/init.d/ssh restart
 
-      add-apt-repository -y ppa:tortoisehg-ppa/releases
+      add-apt-repository -y ppa:mercurial-ppa/releases
       apt-get update
       apt-get install -y g++ build-essential
       apt-get install -y gettext curl git nano

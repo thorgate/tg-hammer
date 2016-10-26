@@ -1,4 +1,5 @@
 import os
+
 import pytest
 
 
@@ -307,18 +308,27 @@ def test_stable_branch(repo, monkeypatch):
     assert 'revset' in result
     assert result['revset']
 
-    expected_backwards = [
-        '%(hash)s %(branch)s %(user)s %(message)s' % {
-            'hash': repo.commit_hash['0:merge->stable'],
-            'branch': 'stable',
-            'user': repo.user_full,
-            'message': merge_msg,
-        },
-        '%s %s %s world is kind' % (repo.commit_hash['world is kind'], repo.default_branch, repo.user_full),
-    ]
-
     if repo.vcs_type == 'git':
-        expected_backwards += ['%s master|stable %s dogs.png' % (repo.commit_hash['dogs.png'], repo.user_full)]
+        expected_backwards = [
+            '%(hash)s %(branch)s %(user)s %(message)s' % {
+                'hash': repo.commit_hash['0:merge->stable'],
+                'branch': 'stable',
+                'user': repo.user_full,
+                'message': merge_msg,
+            },
+            '%s master|stable %s world is kind' % (repo.commit_hash['world is kind'], repo.user_full),
+            '%s master|stable %s dogs.png' % (repo.commit_hash['dogs.png'], repo.user_full)
+        ]
+    else:
+        expected_backwards = [
+            '%(hash)s %(branch)s %(user)s %(message)s' % {
+                'hash': repo.commit_hash['0:merge->stable'],
+                'branch': 'stable',
+                'user': repo.user_full,
+                'message': merge_msg,
+            },
+            '%s %s %s world is kind' % (repo.commit_hash['world is kind'], repo.default_branch, repo.user_full),
+        ]
 
     assert result['backwards'] == expected_backwards
 
@@ -438,67 +448,77 @@ def test_vcs_deploy_with_wrong_branchname_or_revision(repo, monkeypatch):
 
 
 def test_vcs_deployment_list(repo, monkeypatch):
+    branch_name = 'top_secret'
+
+    # Make a commit to top_secret
+    repo.store_commit_hash('8.txt', branch=branch_name)
+
+    # Test that it was stored
+    assert repo.commit_hash.get('8.txt', None)
+
+    # Push to remote
+    repo.push(branch=branch_name)
+
+    # Make a commit to master
+    repo.store_commit_hash('9.txt', branch=[repo.default_branch])
+
+    # Test that it was stored
+    assert repo.commit_hash.get('9.txt', None)
+
+    # Push to remote
+    repo.push(branch=repo.default_branch)
+
+    # set host string
+    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
+    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+    obj = repo.get_vcs()
+
+    # Need to do this to avoid asking the user which branch to use.
+    original_get_branch = obj._real.get_branch
+    obj._real.get_branch = lambda *args: repo.default_branch
+    deployment_list = obj.deployment_list()
+    obj._real.get_branch = original_get_branch
+
+    assert 'forwards' in deployment_list
+    assert 'revset' in deployment_list
+
+    inner_list = deployment_list['forwards']
+
+    list_without_hashes = [' '.join(i.split()[1:]) for i in inner_list]
+
     if repo.vcs_type == 'git':
-        branch_name = 'top_secret'
-
-        # Make a commit to top_secret
-        repo.store_commit_hash('8.txt', branch=branch_name)
-
-        # Test that it was stored
-        assert repo.commit_hash.get('8.txt', None)
-
-        # Push to remote
-        repo.push(branch=branch_name)
-
-        # Make a commit to master
-        repo.store_commit_hash('9.txt', branch=['master'])
-
-        # Test that it was stored
-        assert repo.commit_hash.get('9.txt', None)
-
-        # Push to remote
-        repo.push(branch='master')
-
-        # set host string
-        monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-        monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
-        obj = repo.get_vcs()
-
-        deployment_list = obj.deployment_list()
-
-        assert 'forwards' in deployment_list
-        assert 'revset' in deployment_list
-
-        inner_list = deployment_list['forwards']
-
-        list_without_hashes = [i[8:] for i in inner_list]
-
         assert list_without_hashes == [
-            'master Testing user <test@test.sdf> 5.txt',
-            'master Testing user <test@test.sdf> 6.txt',
-            'master Testing user <test@test.sdf> dogs.png',
-            'master Testing user <test@test.sdf> world is kind',
-            'master Testing user <test@test.sdf> 9.txt'
+            '{} Testing user <test@test.sdf> 5.txt'.format(repo.default_branch),
+            '{} Testing user <test@test.sdf> 6.txt'.format(repo.default_branch),
+            '{} Testing user <test@test.sdf> dogs.png'.format(repo.default_branch),
+            '{} Testing user <test@test.sdf> world is kind'.format(repo.default_branch),
+            '{} Testing user <test@test.sdf> 9.txt'.format(repo.default_branch)
+        ]
+    else:
+        assert list_without_hashes == [
+            '{} Testing user <test@test.sdf> dogs.png'.format(repo.default_branch),
+            '{} Testing user <test@test.sdf> world is kind'.format(repo.default_branch),
+            '{} Testing user <test@test.sdf> 9.txt'.format(repo.default_branch)
         ]
 
-        obj.update(branch_name)
+    obj.update(branch_name)
 
-        # Make a commit to top_secret
-        repo.store_commit_hash('10.txt', branch=[branch_name])
+    # Make a commit to top_secret
+    repo.store_commit_hash('10.txt', branch=[branch_name])
 
-        # Push to top_secret
-        repo.push(branch=branch_name)
+    # Push to top_secret
+    repo.push(branch=branch_name)
 
-        deployment_list = obj.deployment_list()
+    deployment_list = obj.deployment_list()
 
-        assert 'forwards' in deployment_list
-        assert 'revset' in deployment_list
+    assert 'forwards' in deployment_list
+    assert 'revset' in deployment_list
 
-        inner_list = deployment_list['forwards']
+    inner_list = deployment_list['forwards']
 
-        list_without_hashes = [i[8:] for i in inner_list]
+    list_without_hashes = [' '.join(i.split()[1:]) for i in inner_list]
 
-        assert list_without_hashes == ['{} Testing user <test@test.sdf> 10.txt'.format(branch_name)]
+    assert list_without_hashes == ['{} Testing user <test@test.sdf> 10.txt'.format(branch_name)]
 
 
 def test_deployment_list_revision_flag(repo, monkeypatch):
@@ -533,19 +553,27 @@ def test_deployment_list_revision_flag(repo, monkeypatch):
     repo.store_commit_hash('11.txt', branch=evil_branch)
     repo.push(branch=evil_branch)
 
-    # The following currently fails with mercurial.
+    deployment_list = obj.deployment_list(revision=evil_branch)
+    assert 'forwards' in deployment_list
+    assert 'revset' in deployment_list
+
+    inner_list = deployment_list['forwards']
+    forwards_list_without_hashes = [' '.join(i.split()[1:]) for i in inner_list]
+
     if repo.vcs_type == 'git':
-        deployment_list = obj.deployment_list(revision=evil_branch)
-        assert 'forwards' in deployment_list
-        assert 'revset' in deployment_list
-
-        forwards_list = deployment_list['forwards']
-        forwards_list_without_hashes = [i[8:] for i in forwards_list]
-
+        assert forwards_list_without_hashes == [
+            '{}|top_secret Testing user <test@test.sdf> 10.txt'.format(evil_branch),
+            '{} Testing user <test@test.sdf> 11.txt'.format(evil_branch),
+        ]
+    else:
         assert forwards_list_without_hashes == [
             'top_secret Testing user <test@test.sdf> 10.txt',
             '{} Testing user <test@test.sdf> 11.txt'.format(evil_branch),
         ]
 
-        revset = deployment_list['revset']
+    revset = deployment_list['revset']
+
+    if repo.vcs_type == 'git':
         assert revset == ' ..origin/{}'.format(evil_branch)
+    else:
+        assert revset == '.::{}'.format(evil_branch)

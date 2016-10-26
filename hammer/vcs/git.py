@@ -85,8 +85,9 @@ class Git(BaseVcs):
         with cd(self.code_dir), hide('running'):
             sep = ':|:|:'
 
-            commit_id, message, author = self.remote_cmd(("git --no-pager log -n 1 --oneline "
-                                                          "--format='%%h%(sep)s%%s%(sep)s%%an <%%ae>'") % dict(sep=sep)).split(sep)
+            commit_id, message, author = \
+                self.remote_cmd(("git --no-pager log -n 1 --oneline "
+                                 "--format='%%h%(sep)s%%s%(sep)s%%an <%%ae>'") % dict(sep=sep)).split(sep)
 
             branch = self.get_branch('HEAD')
 
@@ -95,7 +96,8 @@ class Git(BaseVcs):
     def _get_commit_branch(self, commit_id):
         # Attempt to figure out the branch/branches via git branch --contains
         try:
-            candidates = self.remote_cmd('git branch --color=never -a --contains %s' % commit_id).strip().splitlines(False)
+            candidates = self.remote_cmd('git branch --color=never -a --contains %s' % commit_id)\
+                .strip().splitlines(False)
 
             # cleanup candidates
             def cleanup_branch_name(_branch_name):
@@ -104,7 +106,7 @@ class Git(BaseVcs):
                 if _branch_name.startswith('* '):
                     _branch_name = _branch_name[2:]
 
-                if 'detached' in _branch_name:
+                if 'detached' in _branch_name or 'HEAD' in _branch_name:
                     return None
 
                 if _branch_name.startswith('origin/'):
@@ -122,10 +124,13 @@ class Git(BaseVcs):
 
             # If there are still some candidates after cleanup return them
             if candidates:
-                return candidates, None
+                if commit_id.lower() == 'head':
+                    commit_id = self.get_commit_id()
+                return candidates, commit_id
 
         except SystemExit as e:
-            # Previous command will exit with code 129 if the commit_id is invalid. All other exit codes MUST trigger a fatal error
+            # Previous command will exit with code 129 if the commit_id is invalid.
+            # All other exit codes MUST trigger a fatal error
             if e.code != 129:
                 raise  # pragma: no cover
 
@@ -138,7 +143,8 @@ class Git(BaseVcs):
                 return [branch, ], None
 
         except SystemExit as e:
-            # Previous command will exit with code 1 if in detached head state. All other exit codes MUST trigger a fatal error
+            # Previous command will exit with code 1 if in detached head state.
+            # All other exit codes MUST trigger a fatal error
             if e.code != 1:
                 raise  # pragma: no cover
 
@@ -160,7 +166,8 @@ class Git(BaseVcs):
         if valid_branches:
             return valid_branches, real_commit
 
-        # in some cases the previous commands won't be able to figure out the branch. Then we fall back onto using I{git_what_branch}
+        # in some cases the previous commands won't be able to figure out the branch.
+        # Then we fall back onto using I{git_what_branch}
         # First lets check local branches
         valid_branches, real_commit = self.git_what_branch(commit_id, remote=False)
 
@@ -168,7 +175,8 @@ class Git(BaseVcs):
         if valid_branches:
             return valid_branches, real_commit
 
-        # Finally, lets also try remote branches via I{git_what_branch} since this commit hash did not exist in local branches
+        # Finally, lets also try remote branches via I{git_what_branch}
+        # since this commit hash did not exist in local branches
         valid_branches, real_commit = self.git_what_branch(commit_id, remote=True)
         return valid_branches, real_commit
 
@@ -181,6 +189,7 @@ class Git(BaseVcs):
                 abort('Could not figure out remote branch (for %s)' % real_commit or commit_id)  # pragma: no cover
 
             elif len(valid_branches) > 1:  # pragma: no cover
+                valid_branches = sorted(valid_branches)
                 if ambiguous:
                     return '|'.join(valid_branches)
 

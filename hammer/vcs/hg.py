@@ -68,7 +68,8 @@ class Mercurial(BaseVcs):
 
     def get_revset_log(self, revs):
         with cd(self.code_dir):
-            result = self.remote_cmd("hg log --template '{rev}:{node|short} {branch} {author} {desc|firstline}\\n' -r '%s'" % revs)
+            result = self.remote_cmd("hg log --template '{rev}:{node|short} {branch} "
+                                     "{author} {desc|firstline}\\n' -r '%s'" % revs)
 
             if not result:
                 return []
