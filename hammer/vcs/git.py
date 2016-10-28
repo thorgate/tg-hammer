@@ -248,7 +248,7 @@ class Git(BaseVcs):
 
         if not int(has_branch):
             try:
-                self.remote_cmd('git show {}'.format(revision))
+                self.remote_cmd('git show --no-pager {}'.format(revision))
                 has_branch = True
             except SystemExit:
                 return False
