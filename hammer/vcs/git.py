@@ -182,6 +182,15 @@ class Git(BaseVcs):
 
     def get_branch(self, commit_id='HEAD', ambiguous=False):
         with cd(self.code_dir), hide('running'):
+
+            # Resolve 'HEAD' into a real commit_id so that the cache functions properly.
+            if commit_id.lower() == 'head':
+                commit_id = self.get_commit_id()
+
+            # Use the branch cache, if possible.
+            if commit_id and commit_id in self._branch_cache:
+                return self._branch_cache[commit_id]
+
             valid_branches, real_commit = self._get_commit_branch(commit_id)
 
             if not valid_branches:
@@ -271,17 +280,64 @@ class Git(BaseVcs):
     def _commit_id_is_too_short(revision):
         return 'The commit id given is too short: {}'.format(revision)
 
+    def _get_revision_and_base_branch(self, revision):
+        base_branch = None
+        on_new_branch = False
+        revision_is_branch = False
+
+        if len(revision) > 0:
+
+            # Check if this is a commit_id or a branch name.
+            # A valid branch name raises a ValueError.
+            try:
+                int(revision, 16)
+                assert len(revision) > 6
+
+            except AssertionError:
+                abort(colors.red(self._commit_id_is_too_short(revision)))
+
+            except ValueError:
+                revision_is_branch = True
+
+                # Make sure that this branch exists in the remote repo.
+                if not self.has_revision(revision):
+                    abort(colors.red(self._no_revision_error(revision)))
+
+                # If this branch does not exist locally, we need to
+                # create it so that the branch searching alg. works.
+                if not self.has_revision(revision, locally=True):
+                    on_new_branch = True
+                    cmd = 'git fetch origin {0}:{0}'.format(revision)
+                    msg_tmpl = 'Not a commit ID and the branch exists remotely. ' \
+                               'Now creating this branch locally: {} with this command: {}'
+                    print(colors.yellow(msg_tmpl.format(revision, cmd)))
+                    self.remote_cmd(cmd)
+                    revision = 'origin/{}'.format(revision)
+
+        # If no revision was given we should use the local branch.
+        else:
+            base_branch = self.get_branch()
+            revision = 'origin/{}'.format(base_branch)
+
+        # If revision supplied is a branch and we didn't create that
+        #  branch in the previous block, lets diff against origin/revision
+        #  instead of using the local version of the branch
+        if revision_is_branch and not on_new_branch:
+            if not revision.startswith('origin/'):
+                revision = 'origin/{}'.format(revision)
+
+        return revision, base_branch
+
     def update(self, revision=''):
-        if not revision:
-            revision = 'origin/%s' % self.get_branch()
+        if revision is None:
+            revision = ''
 
         with cd(self.code_dir), hide('running', 'stdout'):
             self.pull()
 
-            if self.has_revision(revision):
-                self.remote_cmd('git checkout %s' % revision)
-            else:
-                abort(colors.red(self._no_revision_error(revision)))
+            revision, base_branch = self._get_revision_and_base_branch(revision)
+
+            self.remote_cmd('git checkout {}'.format(revision))
 
     def get_all_branches(self, remote):
         with cd(self.code_dir):
@@ -336,50 +392,7 @@ class Git(BaseVcs):
             # First lets pull
             self.pull()
 
-            base_branch = None
-            on_new_branch = False
-            revision_is_branch = False
-
-            if len(revision) > 0:
-
-                # Check if this is a commit_id or a branch name.
-                # A valid branch name raises a ValueError.
-                try:
-                    int(revision, 16)
-                    assert len(revision) > 6
-
-                except AssertionError:
-                    abort(colors.red(self._commit_id_is_too_short(revision)))
-
-                except ValueError:
-                    revision_is_branch = True
-
-                    # Make sure that this branch exists in the remote repo.
-                    if not self.has_revision(revision):
-                        abort(colors.red(self._no_revision_error(revision)))
-
-                    # If this branch does not exist locally, we need to
-                    # create it so that the branch searching alg. works.
-                    if not self.has_revision(revision, locally=True):
-                        on_new_branch = True
-                        cmd = 'git fetch origin {0}:{0}'.format(revision)
-                        msg_tmpl = 'Not a commit ID and the branch exists remotely. ' \
-                                   'Now creating this branch locally: {} with this command: {}'
-                        print(colors.yellow(msg_tmpl.format(revision, cmd)))
-                        self.remote_cmd(cmd)
-                        revision = 'origin/{}'.format(revision)
-
-            # If no revision was given we should use the local branch.
-            else:
-                base_branch = self.get_branch()
-                revision = 'origin/{}'.format(base_branch)
-
-            # If revision supplied is a branch and we didn't create that
-            #  branch in the previous block, lets diff against origin/revision
-            #  instead of using the local version of the branch
-            if revision_is_branch and not on_new_branch:
-                if not revision.startswith('origin/'):
-                    revision = 'origin/{}'.format(revision)
+            revision, base_branch = self._get_revision_and_base_branch(revision)
 
             revision_set = self.get_revset(' ', revision)
             revisions = self.get_revset_log(revision_set, base_branch=base_branch)
@@ -407,7 +420,7 @@ class Git(BaseVcs):
 
     def get_revset_log(self, revs, base_branch=None):
         with cd(self.code_dir):
-            result = self.remote_cmd("git --no-pager log %s --oneline --format='%%h %%(branch)s %%an <%%ae> %%s'" % revs).strip()
+            result = self.remote_cmd("git --no-pager log %s --oneline --format='%%h {} %%an <%%ae> %%s'" % revs).strip()
 
             if result:
                 result = result.split('\n')
@@ -416,7 +429,7 @@ class Git(BaseVcs):
 
             return []
 
-    def log_add_branch(self, line, needle='branch', base_branch=None):
+    def log_add_branch(self, line, base_branch=None):
         if not line:
             return line  # pragma: no cover
 
@@ -426,10 +439,10 @@ class Git(BaseVcs):
             return line  # pragma: no cover
 
         def get_branch():
-            print(colors.yellow('Figuring out branch for commit: %s' % line.replace('%%(%s)s' % needle, '-')))
+            print(colors.yellow('Figuring out branch for commit: {}'.format(line.replace('{}', '-'))))
             return self.get_branch(commit_hash, ambiguous=True)
 
-        return line % {needle: base_branch if base_branch is not None else get_branch()}
+        return line.format(base_branch if base_branch is not None else get_branch())
 
     @classmethod
     def get_revset(cls, x, y):

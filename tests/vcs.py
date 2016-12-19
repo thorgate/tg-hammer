@@ -488,10 +488,6 @@ def test_vcs_deployment_list(repo, monkeypatch):
 
     if repo.vcs_type == 'git':
         assert list_without_hashes == [
-            '{} Testing user <test@test.sdf> 5.txt'.format(repo.default_branch),
-            '{} Testing user <test@test.sdf> 6.txt'.format(repo.default_branch),
-            '{} Testing user <test@test.sdf> dogs.png'.format(repo.default_branch),
-            '{} Testing user <test@test.sdf> world is kind'.format(repo.default_branch),
             '{} Testing user <test@test.sdf> 9.txt'.format(repo.default_branch)
         ]
     else:
@@ -577,3 +573,49 @@ def test_deployment_list_revision_flag(repo, monkeypatch):
         assert revset == ' ..origin/{}'.format(evil_branch)
     else:
         assert revset == '.::{}'.format(evil_branch)
+
+    obj.update(target_version)
+
+
+def test_multiple_commits_question(repo, monkeypatch):
+    if repo.vcs_type == 'git':
+
+        repo.store_commit_hash('12.txt', branch=['master'])
+        repo.merge_to_stable('1:merge->stable')
+        assert repo.commit_hash.get('1:merge->stable', None)
+
+        repo.push(branch='master')
+        repo.push(branch='stable')
+
+        # set host string
+        monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
+        monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+        obj = repo.get_vcs()
+        obj.update(repo.commit_hash['1:merge->stable'])
+
+        branch = obj.get_branch(repo.commit_hash['1:merge->stable'])
+        assert branch == 'stable'
+
+        monkeypatch.setattr('__builtin__.raw_input', lambda x: '2')
+        branch = obj.get_branch(repo.commit_hash['12.txt'])
+        assert branch == 'stable'
+
+        assert obj._branch_cache == {repo.commit_hash['1:merge->stable']: 'stable',
+                                     repo.commit_hash['12.txt']: 'stable'}
+
+        obj._branch_cache[repo.commit_hash['1:merge->stable']] = 'very_very_very_stable'
+
+        branch = obj.get_branch(repo.commit_hash['1:merge->stable'])
+
+        assert branch == 'very_very_very_stable', repr((branch, 'very_very_very_stable'))
+
+
+def test_percent_sign_error(repo, monkeypatch):
+    repo.store_commit_hash('HELLO %', branch=[repo.default_branch])
+    repo.push(branch=repo.default_branch)
+    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
+    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+    obj = repo.get_vcs()
+
+    # This line failed before fixing the percent sign error.
+    obj.deployment_list(revision=repo.commit_hash['HELLO %'])
