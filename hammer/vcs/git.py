@@ -182,11 +182,12 @@ class Git(BaseVcs):
 
     def get_branch(self, commit_id='HEAD', ambiguous=False):
         with cd(self.code_dir), hide('running'):
-            valid_branches, real_commit = self._get_commit_branch(commit_id)
 
             # Use the branch cache, if possible.
-            if real_commit and real_commit in self._branch_cache:
-                return self._branch_cache[real_commit]
+            if commit_id and commit_id in self._branch_cache:
+                return self._branch_cache[commit_id]
+
+            valid_branches, real_commit = self._get_commit_branch(commit_id)
 
             if not valid_branches:
                 # No compatible branch found. Oh well lets just abort...
