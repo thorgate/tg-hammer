@@ -183,6 +183,10 @@ class Git(BaseVcs):
     def get_branch(self, commit_id='HEAD', ambiguous=False):
         with cd(self.code_dir), hide('running'):
 
+            # Resolve 'HEAD' into a real commit_id so that the cache functions properly.
+            if commit_id.lower() == 'head':
+                commit_id = self.get_commit_id()
+
             # Use the branch cache, if possible.
             if commit_id and commit_id in self._branch_cache:
                 return self._branch_cache[commit_id]
