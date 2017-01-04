@@ -1,0 +1,55 @@
+# Dockerfile for master machine
+
+FROM python:2.7.13
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+
+##############   Install system requirements   #################
+RUN apt-get update
+RUN apt-get install -y software-properties-common
+RUN add-apt-repository -y 'deb http://ppa.launchpad.net/mercurial-ppa/releases/ubuntu xenial main'
+RUN apt-get update
+RUN apt-get upgrade -y
+RUN apt-get install -y --no-install-recommends sudo g++ build-essential gettext curl git mercurial nano python-dev python-virtualenv python3.4 python3.4-dev openssh-server
+RUN rm -rf /var/lib/apt/lists/*
+
+
+##############   Add SSH keys   #################
+COPY ./tests/ssh /root/.ssh
+RUN chmod 700 -R /root/.ssh
+RUN grep -q -F 'RSAAuthentication yes' /etc/ssh/sshd_config || echo 'RSAAuthentication yes' >> /etc/ssh/sshd_config
+RUN grep -q -F 'PubkeyAuthentication yes' /etc/ssh/sshd_config || echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config
+RUN grep -q -F 'StrictHostKeyChecking no' /etc/ssh/ssh_config || echo 'StrictHostKeyChecking no' >> /etc/ssh/ssh_config
+RUN grep -q -F 'NoHostAuthenticationForLocalhost yes' /etc/ssh/ssh_config || echo 'NoHostAuthenticationForLocalhost yes' >> /etc/ssh/ssh_config
+RUN echo `cat /root/.ssh/test_key.pub` >> /root/.ssh/authorized_keys
+RUN echo "Host hammer.repo.host" >> /root/.ssh/config
+RUN echo "    IdentityFile /root/.ssh/test_key" >> /root/.ssh/config
+RUN echo "    User root" >> /root/.ssh/config
+RUN echo "Host staging.hammer" >> /root/.ssh/config
+RUN echo "    IdentityFile /root/.ssh/test_key" >> /root/.ssh/config
+
+
+##############   Make repo directories   #################
+RUN mkdir -p /repos/
+RUN mkdir -p /repos/git
+RUN mkdir -p /repos/hg
+RUN chmod 777 /repos/git
+RUN chmod 777 /repos/hg
+
+
+#########   Copy source files  ###########
+ADD . /hammer
+
+
+#########   Install requirements into a virtual env  ###########
+WORKDIR /hammer
+RUN virtualenv venv
+
+# Remove old package egg
+RUN rm -rf tg_hammer.egg-info
+
+# Install requirements and hammer
+RUN source venv/bin/activate && pip install -r requirements/development.txt && ./setup.py develop
+
+# Remove compiled python files
+RUN find . | grep -E "(__pycache__|\.pyc|\.pyo$)" | xargs rm -rf
+

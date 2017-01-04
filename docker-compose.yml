@@ -1,0 +1,29 @@
+# Docker-compose configuration for hammer-time
+
+version: '2'
+
+services:
+    master:
+        build:
+            context: .
+            dockerfile: Dockerfile-master
+        entrypoint: /hammer/docker-entrypoint-master.sh
+        networks:
+            hammer:
+                aliases:
+                    - hammer.repo.host
+        depends_on:
+            - slave
+
+    slave:
+        build:
+            context: .
+            dockerfile: Dockerfile-slave
+        entrypoint: /hammer/docker-entrypoint-slave.sh
+        networks:
+            hammer:
+                aliases:
+                    - staging.hammer
+
+networks:
+    hammer:
