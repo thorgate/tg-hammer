@@ -2,10 +2,14 @@
 
 service ssh restart
 
-py.test
+coverage run -m py.test
 # Uncomment the line below and comment the line above to leave the master running.
 # tail -f /dev/null
 
-# Ensure we set correct exitcode (CI)
 RES=$?
+
+# Report coverage
+coverage report && coverage html
+
+# Exit with correct exitcode
 exit $RES

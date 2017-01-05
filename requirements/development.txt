@@ -5,7 +5,6 @@
 pytest
 coverage
 coveralls
-pytest-cov
 pytest-flake8
 mock>=1.0.1
 tox>=1.7.0

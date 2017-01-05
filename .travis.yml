@@ -10,6 +10,24 @@ script:
   - docker-compose --version
   - docker --version
   - ./travis.sh
+  - coveralls
 
 notifications:
     email: false
+
+deploy:
+  provider: pypi
+  user: thorgate
+  password:
+    secure: >
+      P237Rn2wThbOiYwWn3qwtL3IqxHA1ISR+zOdV757myOwbyH0UNtLSLt64IUc7Ccxy401wYIl7ZNLOffTpYc+FJ2PTSoSk1mEWXlI/TBFaNo/H
+      42N+/I7jcqXmPnSmQG/0LBbPwwmYXY3Zmf9/6vBjvFJGUaDe9rwL20e0LaE/pjjJ7ZjRi9iJa46hyw5XPg2MjhypDIXBw8M4Bvizm7xy2Q0/1
+      1yYl84OymQwvcOGPNPWpGcrWqFQze6jGZ5dd+2I+760v6ZswW6xTJkfRhKpi3p9CL0bTcqXTUhlWtkW0BhTg1pGfYTJWINzsvyptnTyi/0TBe
+      DZr2TFqg5F1WY0TG6LdLjqYsaFq1dhZuX95EkA+vS5HdbGG12UIcmKLt/LhKzde6fwnR8wHEjEvq50GseS85isM8cWVPAtAVBicIOUxudZHb8
+      lBElsb3Cj+BYty97yArZyuNQjWK3PZRgPOETgpYrLe3ODO5/21hdGeElfNbeRbE2xUFNLlypWujAYd3d/GAPIhlLQWKh7VRGJLex+qEZnqoXI
+      5T+2Y7O89yESPV6h3yuQd+iLTfYu89SYnTx1S2pdPhTLOS7HCXrCBo7sJMwczL9Fr5kh4m1L6SJAT5/4ZguBLxSMauOMUe+/AQq4d3lpSKjnS
+      xFdmDbbtvpqu7TNyLWo0Tg2Tp3sq4=
+  on:
+    tags: true
+    distributions: sdist bdist_wheel
+    repo: thorgate/tg-hammer
