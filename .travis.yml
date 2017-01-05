@@ -9,7 +9,7 @@ before_install:
 script:
   - docker-compose --version
   - docker --version
-  - ./run-tests.sh
+  - ./travis.sh
 
 notifications:
     email: false

@@ -34,6 +34,10 @@ RUN mkdir -p /repos/hg
 RUN chmod 777 /repos/git
 RUN chmod 777 /repos/hg
 
+#########   Add requirements   ###########
+ADD ./requirements /hammer/requirements
+RUN pip install -r /hammer/requirements/development.txt
+
 
 #########   Copy source files  ###########
 ADD . /hammer
@@ -45,8 +49,8 @@ WORKDIR /hammer
 # Remove old package egg
 RUN rm -rf tg_hammer.egg-info
 
-# Install requirements and hammer
-RUN pip install -r requirements/development.txt && ./setup.py develop
+# Add current dir to installed packages
+RUN ./setup.py develop
 
 # Remove compiled python files
 RUN find . | grep -E "(__pycache__|\.pyc|\.pyo$)" | xargs rm -rf

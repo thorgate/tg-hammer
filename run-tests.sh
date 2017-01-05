@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
 
-# Build images
-docker-compose build
-
-# Bring slave up in detached mode
-docker-compose up -d slave
-
-# Run tests
-docker-compose run master /hammer/docker-entrypoint-master.sh
-RES=$?
+docker-compose up --build -d slave
+docker-compose up --build master
 
 # Bring both containers down
 docker-compose down
