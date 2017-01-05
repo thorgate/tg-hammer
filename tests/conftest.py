@@ -35,10 +35,10 @@ class VcsTestUtil(object):
     @property
     def expected_remote(self):
         if self.vcs_type == 'git':
-            return 'vcs@hammer.repo.host:/repos/git/test.git'
+            return 'root@hammer.repo.host:/repos/git/test.git'
 
         else:
-            return 'ssh://vcs@hammer.repo.host//repos/hg/test'
+            return 'ssh://root@hammer.repo.host//repos/hg/test'
 
     @property
     def default_branch(self):
@@ -96,11 +96,10 @@ class VcsTestUtil(object):
             subprocess.check_output(("git remote add origin %s" % self.expected_remote).split(), cwd=self.repo_dir)
 
             if os.path.exists('/repos/git/test.git'):
-                subprocess.check_output("sudo rm -rf /repos/git/test.git".split())
+                subprocess.check_output("rm -rf /repos/git/test.git".split())
 
             subprocess.check_output("mkdir -p /repos/git/test.git".split())
             subprocess.check_output("git --bare init /repos/git/test.git".split())
-            subprocess.check_output("sudo chown vcs:vcs -R /repos/git/test.git".split())
 
         else:
             # add remote path
@@ -110,11 +109,10 @@ class VcsTestUtil(object):
 
             # if os.path.exists('/repos/hg/test.hg')
             if os.path.exists('/repos/hg/test'):
-                subprocess.check_output("sudo rm -rf /repos/hg/test".split())
+                subprocess.check_output("rm -rf /repos/hg/test".split())
 
             subprocess.check_output("mkdir -p /repos/hg/test".split())
             subprocess.check_output("hg init /repos/hg/test".split())
-            subprocess.check_output("sudo chown vcs:vcs -R /repos/hg/test".split())
 
     def push(self, branch=False):
         if self.vcs_type == 'git':
