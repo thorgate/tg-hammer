@@ -10,10 +10,13 @@ script:
   - docker-compose --version
   - docker --version
   - ./travis.sh
-  - coveralls
 
 notifications:
     email: false
+
+after_success:
+  - pip install coveralls
+  - coveralls
 
 deploy:
   provider: pypi
