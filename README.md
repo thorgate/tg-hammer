@@ -39,7 +39,7 @@ where deployments are run on.
 
 To run the tests manually, first comment out the line:
 
-    source venv/bin/activate && py.test
+    py.test
 
 and uncomment the line
 
@@ -56,7 +56,7 @@ Now you can enter a `bash` shell inside the master by executing:
 
 At this point you can simply execute
 
-    source venv/bin/activate && py.test
+    py.test
 
 to run the tests.
 

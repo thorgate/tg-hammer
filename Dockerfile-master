@@ -1,7 +1,6 @@
 # Dockerfile for master machine
 
 FROM python:2.7.13
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
 ##############   Install system requirements   #################
 RUN apt-get update
@@ -9,7 +8,7 @@ RUN apt-get install -y software-properties-common
 RUN add-apt-repository -y 'deb http://ppa.launchpad.net/mercurial-ppa/releases/ubuntu xenial main'
 RUN apt-get update
 RUN apt-get upgrade -y
-RUN apt-get install -y --no-install-recommends sudo g++ build-essential gettext curl git mercurial nano python-dev python-virtualenv python3.4 python3.4-dev openssh-server
+RUN apt-get install -y --no-install-recommends sudo g++ build-essential git mercurial python-dev openssh-server
 RUN rm -rf /var/lib/apt/lists/*
 
 
@@ -40,15 +39,14 @@ RUN chmod 777 /repos/hg
 ADD . /hammer
 
 
-#########   Install requirements into a virtual env  ###########
+#########   Install requirements   ###########
 WORKDIR /hammer
-RUN virtualenv venv
 
 # Remove old package egg
 RUN rm -rf tg_hammer.egg-info
 
 # Install requirements and hammer
-RUN source venv/bin/activate && pip install -r requirements/development.txt && ./setup.py develop
+RUN pip install -r requirements/development.txt && ./setup.py develop
 
 # Remove compiled python files
 RUN find . | grep -E "(__pycache__|\.pyc|\.pyo$)" | xargs rm -rf
