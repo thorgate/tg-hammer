@@ -610,8 +610,10 @@ def test_multiple_commits_question(repo, monkeypatch):
         assert branch == 'very_very_very_stable', repr((branch, 'very_very_very_stable'))
 
 
-def test_percent_sign_error(repo, monkeypatch):
+def test_commit_messages_with_formatting_chars(repo, monkeypatch):
     repo.store_commit_hash('HELLO %', branch=[repo.default_branch])
+    repo.store_commit_hash('Commit {} message', branch=[repo.default_branch])
+    repo.store_commit_hash('Django {% include %} template', branch=[repo.default_branch])
     repo.push(branch=repo.default_branch)
     monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
     monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
@@ -619,3 +621,7 @@ def test_percent_sign_error(repo, monkeypatch):
 
     # This line failed before fixing the percent sign error.
     obj.deployment_list(revision=repo.commit_hash['HELLO %'])
+
+    # These one failed a bit later
+    obj.deployment_list(revision=repo.commit_hash['Commit {} message'])
+    obj.deployment_list(revision=repo.commit_hash['Django {% include %} template'])

@@ -442,7 +442,9 @@ class Git(BaseVcs):
             print(colors.yellow('Figuring out branch for commit: {}'.format(line.replace('{}', '-'))))
             return self.get_branch(commit_hash, ambiguous=True)
 
-        return line.format(base_branch if base_branch is not None else get_branch())
+        # The line begins with commit hash and then "{}", thus we can be certain that the first occurrence of "{}" is
+        #  the one we're interested in.
+        return line.replace('{}', base_branch if base_branch is not None else get_branch(), 1)
 
     @classmethod
     def get_revset(cls, x, y):
