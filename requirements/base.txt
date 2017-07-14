@@ -1,1 +1,4 @@
 fabric>=1.10.2,<2
+
+# Backport of python3 ipaddress module
+py2-ipaddress>=3.4.1,<4

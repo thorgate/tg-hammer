@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 
-docker-compose up --build -d slave
-docker-compose up --build master
+# Build images
+docker-compose build
+
+# Bring containers up in detached mode
+docker-compose up -d
+
+# Wait for tests to complete
+echo "Running tests, please wait..."
+RES=`docker wait tghammer_master_1`
+
+# Show logs
+docker logs tghammer_master_1
 
 # Bring both containers down
 docker-compose down
