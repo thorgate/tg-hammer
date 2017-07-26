@@ -82,8 +82,7 @@ class DockerNetworkAllocator(object):
         if output == '':
             return
 
-        for line in output.split('\n'):
-            yield line
+        return [line.strip() for line in output.split('\n')]
 
     def _networks_in_use(self):
         return list(chain(
