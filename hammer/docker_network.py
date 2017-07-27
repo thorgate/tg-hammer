@@ -80,7 +80,7 @@ class DockerNetworkAllocator(object):
         output = self._cmd(cmd).decode('utf8').strip()
 
         if output == '':
-            return
+            return []
 
         return [line.strip() for line in output.split('\n')]
 
