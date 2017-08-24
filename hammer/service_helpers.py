@@ -79,12 +79,16 @@ def install_services(services):
 def install_services_cp(services):
     """Install provided services by copying the remote file to the detected ``daemon_type`` specific directory
 
-    :param services: List of services to install where each item is a tuple with the signature: ``(target_name, remote_file_path)``
+    :param services: List of services to install where each item is a tuple with the signature:
+        ``(target_name, remote_file_path[, transform])``
 
     The remote_file_path supports the following keywords:
 
     -  ``${DAEMON_TYPE}``: Replaced with the detected daemon type (see `DAEMON_TYPES`)
     -  ``${DAEMON_FILE_EXTENSION}``: Replaced with the `file_extension` value for the detected daemon type (see `DAEMON_TYPES`)
+
+    `transform` is an optional function w/ signature `(target_name, remote_file_data) -> (target_name, remote_file_data)` which
+      can be used for dynamic service configuration
 
     **Note:**
         One can overwrite the default target dir via ``env.service_daemon_target_dir``
@@ -97,7 +101,14 @@ def install_services_cp(services):
     prepared_services = []
     daemon_type, daemon_conf = get_service_daemon()
 
-    for target_name, remote_file_path in services:
+    for parts in services:
+        if len(parts) == 3:
+            target_name, remote_file_path, transform = parts
+
+        else:
+            target_name, remote_file_path = parts
+            transform = None
+
         # Construct remote path
         remote_file_path = remote_file_path.replace('${DAEMON_TYPE}', daemon_type)
         remote_file_path = remote_file_path.replace('${DAEMON_FILE_EXTENSION}', daemon_conf['file_extension'])
@@ -106,10 +117,13 @@ def install_services_cp(services):
         buf = StringIO()
         get(remote_file_path, buf)
 
+        the_item = (target_name, buf.getvalue())
+
+        if transform:
+            the_item = transform(*the_item)
+
         # store it in prepared services
-        prepared_services.append(
-            (target_name, buf.getvalue()),
-        )
+        prepared_services.append(the_item)
 
     # Use standard install_services to install them
     return install_services(prepared_services)
