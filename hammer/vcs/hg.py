@@ -68,7 +68,7 @@ class Mercurial(BaseVcs):
 
     def get_revset_log(self, revs):
         with cd(self.code_dir):
-            result = self.remote_cmd("hg log --template '{rev}:{node|short} {branch} "
+            result = self.remote_cmd("hg --config ui.color=never log --pager=off --template '{rev}:{node|short} {branch} "
                                      "{author} {desc|firstline}\\n' -r '%s'" % revs)
 
             if not result:
@@ -104,7 +104,7 @@ class Mercurial(BaseVcs):
 
     def _changed_files(self, revision_set):
         with cd(self.code_dir):
-            result = self.remote_cmd("hg status --rev '%s'" % revision_set, quiet=True).splitlines()
+            result = self.remote_cmd("hg --config ui.color=never --pager=off status --rev '%s'" % revision_set, quiet=True).splitlines()
 
             return result
 
