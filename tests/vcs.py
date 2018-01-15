@@ -625,3 +625,13 @@ def test_commit_messages_with_formatting_chars(repo, monkeypatch):
     # These one failed a bit later
     obj.deployment_list(revision=repo.commit_hash['Commit {} message'])
     obj.deployment_list(revision=repo.commit_hash['Django {% include %} template'])
+
+
+def test_normalize_does_not_fail_when_detached_in_branch_name(repo, monkeypatch):
+    if repo.vcs_type == 'git':
+        bad_branches = ['blaw blaw blaw detached at blaw blaw blaw', 'blaw blaw blaw detached from blaw blaw blaw']
+
+        obj = repo.get_vcs()
+        for branch in bad_branches:
+            normalized_branch = obj.normalize_branch(branch)
+            assert normalized_branch is None

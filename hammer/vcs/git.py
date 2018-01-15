@@ -106,7 +106,10 @@ class Git(BaseVcs):
                 if _branch_name.startswith('* '):
                     _branch_name = _branch_name[2:]
 
-                if 'detached' in _branch_name or 'HEAD' in _branch_name:
+                if not Git._can_normalize_branch(_branch_name):
+                    return None
+
+                if 'HEAD' in _branch_name:
                     return None
 
                 if _branch_name.startswith('origin/'):
@@ -114,9 +117,6 @@ class Git(BaseVcs):
 
                 if _branch_name.startswith('remotes/origin/'):
                     _branch_name = _branch_name[15:]
-
-                if not _branch_name:
-                    return None
 
                 return _branch_name
 
@@ -461,8 +461,12 @@ class Git(BaseVcs):
         return os.path.exists(os.path.join(project_root, '.git'))
 
     @staticmethod
+    def _can_normalize_branch(branch):
+        return branch and 'detached from' not in branch and 'detached at' not in branch
+
+    @staticmethod
     def normalize_branch(branch):
-        if not branch or 'detached from' in branch:
+        if not Git._can_normalize_branch(branch):
             return None
 
         return branch.replace('origin/', '').replace('HEAD', '').replace('->', '').strip('/').strip()
