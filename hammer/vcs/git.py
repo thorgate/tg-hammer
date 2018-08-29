@@ -420,7 +420,7 @@ class Git(BaseVcs):
 
     def get_revset_log(self, revs, base_branch=None):
         with cd(self.code_dir):
-            result = self.remote_cmd("git --no-pager log %s --oneline --format='%%h {} %%an <%%ae> %%s'" % revs).strip()
+            result = self.remote_cmd("git --no-pager log --oneline --format='%%h {} %%an <%%ae> %%s' %s" % revs).strip()
 
             if result:
                 result = result.split('\n')
