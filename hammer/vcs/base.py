@@ -1,4 +1,5 @@
 import re
+import ftfy
 
 from fabric.api import sudo, run, env, hide
 
@@ -106,12 +107,16 @@ class BaseVcs(object):
         else:
             return self._remote_cmd(*args, **kwargs)
 
+    @classmethod
+    def cleanup_command_result(cls, result):
+        return ftfy.fix_text(ftfy.guess_bytes(result)[0])
+
     def _remote_cmd(self, *args, **kwargs):
         if not self.use_sudo:  # pragma: no cover
-            return run(*args, **kwargs)
+            return self.cleanup_command_result(run(*args, **kwargs))
 
         else:
-            return sudo(*args, **kwargs)  # pragma: no cover
+            return self.cleanup_command_result(sudo(*args, **kwargs))  # pragma: no cover
 
     def _changed_files(self, revision_set):
         raise NotImplementedError  # pragma: no cover
