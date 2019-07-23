@@ -96,43 +96,50 @@ class Git(BaseVcs):
     def _get_commit_branch(self, commit_id):
         # Attempt to figure out the branch/branches via git branch --contains
         try:
-            candidates = self.remote_cmd('git branch --color=never -a --contains %s' % commit_id)\
-                .strip().splitlines(False)
+            candidates = self.remote_cmd(
+                'git for-each-ref --contains %s --format \'%%(refname)\' refs/remotes/' % commit_id
+            ).strip().splitlines(False)
+        except SystemExit:
+            # Fall back to older way of determining the branch
+            try:
+                candidates = self.remote_cmd(
+                    'git branch --color=never -a --contains %s' % commit_id
+                ).strip().splitlines(False)
+            except SystemExit as e:
+                # Previous command will exit with code 129 if the commit_id is invalid.
+                # All other exit codes MUST trigger a fatal error
+                if e.code != 129:
+                    raise  # pragma: no cover
 
-            # cleanup candidates
-            def cleanup_branch_name(_branch_name):
-                _branch_name = _branch_name.strip()
+        # cleanup candidates
+        def cleanup_branch_name(_branch_name):
+            _branch_name = _branch_name.strip()
 
-                if _branch_name.startswith('* '):
-                    _branch_name = _branch_name[2:]
+            if _branch_name.startswith('['):
+                return None
 
-                if not Git._can_normalize_branch(_branch_name):
-                    return None
+            if _branch_name.startswith('* '):
+                _branch_name = _branch_name[2:]
 
-                if 'HEAD' in _branch_name:
-                    return None
+            if not Git._can_normalize_branch(_branch_name):
+                return None
 
-                if _branch_name.startswith('origin/'):
-                    _branch_name = _branch_name[7:]
+            if 'HEAD' in _branch_name:
+                return None
 
-                if _branch_name.startswith('remotes/origin/'):
-                    _branch_name = _branch_name[15:]
+            for prefix in ['refs/remotes/origin/', 'refs/remotes/', 'remotes/origin/', 'origin/']:
+                if _branch_name.startswith(prefix):
+                    _branch_name = _branch_name[len(prefix):]
 
-                return _branch_name
+            return _branch_name
 
-            candidates = list(filter(lambda _b: _b, set(map(cleanup_branch_name, candidates))))
+        candidates = list(filter(lambda _b: _b, set(map(cleanup_branch_name, candidates))))
 
-            # If there are still some candidates after cleanup return them
-            if candidates:
-                if commit_id.lower() == 'head':
-                    commit_id = self.get_commit_id()
-                return candidates, commit_id
-
-        except SystemExit as e:
-            # Previous command will exit with code 129 if the commit_id is invalid.
-            # All other exit codes MUST trigger a fatal error
-            if e.code != 129:
-                raise  # pragma: no cover
+        # If there are still some candidates after cleanup return them
+        if candidates:
+            if commit_id.lower() == 'head':
+                commit_id = self.get_commit_id()
+            return candidates, commit_id
 
         # Attempt to figure out the branch via git symbolic-ref
         try:
@@ -250,14 +257,15 @@ class Git(BaseVcs):
             repo_url = self.repo_url()
 
         # Returns 1 if this revision (branch) exists on the remote repo or 0 if it does not.
-        cmd = 'git ls-remote --heads {repo_url} {revision} | wc -l'.format(repo_url=repo_url,
-                                                                           revision=revision_without_origin)
+        cmd = u'git ls-remote --heads {repo_url} {revision} | wc -l'.format(
+            repo_url=repo_url, revision=revision_without_origin,
+        )
 
         has_branch = self.remote_cmd(cmd)
 
         if not int(has_branch):
             try:
-                self.remote_cmd('git show --no-pager {}'.format(revision))
+                self.remote_cmd(u'git show --no-pager {}'.format(revision))
                 has_branch = True
             except SystemExit:
                 return False
@@ -266,19 +274,19 @@ class Git(BaseVcs):
 
     @staticmethod
     def _no_revision_error(revision):
-        return 'This revision or commit_id does not exist in the repo: {}'.format(revision)
+        return u'This revision or commit_id does not exist in the repo: {}'.format(revision)
 
     @staticmethod
     def _no_remote_revision_allowed_error(revision):
-        return 'One cannot deploy a branch that starts with "origin/". Branch given: {}'.format(revision)
+        return u'One cannot deploy a branch that starts with "origin/". Branch given: {}'.format(revision)
 
     @staticmethod
     def _no_revisions_in_remote_branch_error(revision):
-        return 'No revisions were found in the remote repository for the branch given: {}'.format(revision)
+        return u'No revisions were found in the remote repository for the branch given: {}'.format(revision)
 
     @staticmethod
     def _commit_id_is_too_short(revision):
-        return 'The commit id given is too short: {}'.format(revision)
+        return u'The commit id given is too short: {}'.format(revision)
 
     def _get_revision_and_base_branch(self, revision):
         base_branch = None
@@ -307,24 +315,24 @@ class Git(BaseVcs):
                 # create it so that the branch searching alg. works.
                 if not self.has_revision(revision, locally=True):
                     on_new_branch = True
-                    cmd = 'git fetch origin {0}:{0}'.format(revision)
-                    msg_tmpl = 'Not a commit ID and the branch exists remotely. ' \
-                               'Now creating this branch locally: {} with this command: {}'
+                    cmd = u'git fetch origin {0}:{0}'.format(revision)
+                    msg_tmpl = u'Not a commit ID and the branch exists remotely. ' \
+                               u'Now creating this branch locally: {} with this command: {}'
                     print(colors.yellow(msg_tmpl.format(revision, cmd)))
                     self.remote_cmd(cmd)
-                    revision = 'origin/{}'.format(revision)
+                    revision = u'origin/{}'.format(revision)
 
         # If no revision was given we should use the local branch.
         else:
             base_branch = self.get_branch()
-            revision = 'origin/{}'.format(base_branch)
+            revision = u'origin/{}'.format(base_branch)
 
         # If revision supplied is a branch and we didn't create that
         #  branch in the previous block, lets diff against origin/revision
         #  instead of using the local version of the branch
         if revision_is_branch and not on_new_branch:
             if not revision.startswith('origin/'):
-                revision = 'origin/{}'.format(revision)
+                revision = u'origin/{}'.format(revision)
 
         return revision, base_branch
 
@@ -337,7 +345,7 @@ class Git(BaseVcs):
 
             revision, base_branch = self._get_revision_and_base_branch(revision)
 
-            self.remote_cmd('git checkout {}'.format(revision))
+            self.remote_cmd(u'git checkout {}'.format(revision))
 
     def get_all_branches(self, remote):
         with cd(self.code_dir):
@@ -439,7 +447,7 @@ class Git(BaseVcs):
             return line  # pragma: no cover
 
         def get_branch():
-            print(colors.yellow('Figuring out branch for commit: {}'.format(line.replace('{}', '-'))))
+            print(colors.yellow(u'Figuring out branch for commit: {}'.format(line.replace('{}', '-'))))
             return self.get_branch(commit_hash, ambiguous=True)
 
         # The line begins with commit hash and then "{}", thus we can be certain that the first occurrence of "{}" is
