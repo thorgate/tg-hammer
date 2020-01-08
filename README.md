@@ -53,7 +53,7 @@ you execute
 
 Now you can enter a `bash` shell inside the master by executing:
 
-    docker exec -it tghammer_master_1 /bin/bash
+    docker exec -it tghammer_master /bin/bash
 
 At this point you can simply execute
 

@@ -19,7 +19,8 @@ class Git(BaseVcs):
         """Get remote url of the current repository"""
 
         # Get all remotes
-        remotes = local("git remote -v | awk '{split($0, a); print a[1]}' | awk '!seen[$0]++'", capture=True).splitlines()
+        with lcd(self.project_root), hide('running'):
+            remotes = local("git remote -v | awk '{split($0, a); print a[1]}' | awk '!seen[$0]++'", capture=True).splitlines()
 
         if not remotes:
             return None

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import uuid
+import sys
 
 import hammer
 
@@ -14,7 +15,9 @@ except ImportError:
     from distutils.core import setup
 
 
-requirements = [str(ir.req) for ir in parse_requirements('requirements/base.txt', session=uuid.uuid1())]
+base_filename = 'base.txt' if sys.version_info[0] < 3 else 'base3.txt'
+
+requirements = [str(ir.req) for ir in parse_requirements('requirements/%s' % base_filename, session=uuid.uuid1())]
 test_requirements = [str(ir.req) for ir in parse_requirements('requirements/development.txt', session=uuid.uuid1())]
 
 setup(

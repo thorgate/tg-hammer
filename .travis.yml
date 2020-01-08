@@ -6,7 +6,6 @@ services:
   - docker
 
 before_install:
-  - docker pull python:2.7.13
 
 script:
   - docker-compose --version
@@ -19,6 +18,15 @@ notifications:
 after_success:
   - pip install coveralls
   - coveralls
+
+jobs:
+  include:
+  - python: "2.7.13"
+    env: PYTHON_VERSION=2.7.13
+  - python: "3.7"
+    env: PYTHON_VERSION=3.7
+  - python: "3.8"
+    env: PYTHON_VERSION=3.8
 
 deploy:
   provider: pypi

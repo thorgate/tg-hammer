@@ -19,6 +19,7 @@ develop-eggs
 lib
 lib64
 .cache
+tests.log
 
 # Installer logs
 pip-log.txt
@@ -54,3 +55,7 @@ output/*/index.html
 docs/_build
 docs/source/_static
 docs/source/_templates
+
+# Temporary files
+Dockerfile-master-rendered
+Dockerfile-slave-rendered

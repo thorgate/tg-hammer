@@ -4,9 +4,10 @@ version: '2'
 
 services:
     master:
+        container_name: tghammer_master
         build:
             context: .
-            dockerfile: Dockerfile-master
+            dockerfile: Dockerfile-master-rendered
         entrypoint: /hammer/docker-entrypoint-master.sh
         networks:
             hammer:
@@ -16,9 +17,10 @@ services:
             - slave
 
     slave:
+        container_name: tghammer_slave
         build:
             context: .
-            dockerfile: Dockerfile-slave
+            dockerfile: Dockerfile-slave-rendered
         entrypoint: /hammer/docker-entrypoint-slave.sh
         networks:
             hammer:

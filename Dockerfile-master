@@ -1,11 +1,14 @@
 # Dockerfile for master machine
 
-FROM python:2.7.13
+FROM python:[PYTHON_VERSION]
 
 ##############   Install system requirements   #################
 RUN apt-get update
 RUN apt-get install -y software-properties-common
-RUN add-apt-repository -y 'deb http://ppa.launchpad.net/mercurial-ppa/releases/ubuntu xenial main'
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F59CE3A8323293EE
+RUN add-apt-repository -y ppa:mercurial-ppa/releases/
+RUN sed -i 's/focal/xenial/' /etc/apt/sources.list.d/mercurial-ppa-ubuntu-releases-focal.list || echo "not needed on py2"
+RUN sed -i 's/jessie/wily/' /etc/apt/sources.list.d/mercurial-ppa-releases-jessie.list || echo "not needed on py3"
 RUN apt-get update
 RUN apt-get upgrade -y
 RUN apt-get install -y --no-install-recommends sudo g++ build-essential git mercurial python-dev openssh-server
@@ -36,7 +39,7 @@ RUN chmod 777 /repos/hg
 
 #########   Add requirements   ###########
 ADD ./requirements /hammer/requirements
-RUN pip install -r /hammer/requirements/development.txt
+RUN pip install -r /hammer/requirements/[DEPENDENCY_FILE].txt
 
 
 #########   Copy source files  ###########
