@@ -14,7 +14,7 @@ class Mercurial(BaseVcs):
             commit_id, branch = self.remote_cmd('hg id -nb', quiet=True).split()
 
             separator = ':|:|:'
-            c_hash, author, message = self.remote_cmd(("hg log --template "
+            c_hash, author, message = self.remote_cmd(("hg --config ui.color=never --config ui.paginate=never log --template "
                                                        "'{node|short}%(sep)s{author}%(sep)s{desc|firstline}\\n' -r %(id)s") % dict(
                 sep=separator,
                 id=commit_id,
