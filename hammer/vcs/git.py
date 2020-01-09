@@ -1,9 +1,19 @@
 import os
+import sys
+from subprocess import check_output, CalledProcessError
 
-from fabric import colors
-from fabric.api import cd, hide, abort, local, lcd, prompt
+from hammer.colors import green, red, yellow
+from hammer.util import abort, prompt, as_str, UnexpectedExit
 
 from .base import BaseVcs
+
+
+def ask_input(*args):
+    if sys.version_info > (3, 0):
+        return input(*args)
+
+    else:
+        return raw_input(*args)  # NOQA
 
 
 class Git(BaseVcs):
@@ -19,8 +29,8 @@ class Git(BaseVcs):
         """Get remote url of the current repository"""
 
         # Get all remotes
-        with lcd(self.project_root), hide('running'):
-            remotes = local("git remote -v | awk '{split($0, a); print a[1]}' | awk '!seen[$0]++'", capture=True).splitlines()
+        remotes = as_str(check_output(['sh', '-c', "git remote -v | awk '{split($0, a); print a[1]}' | awk '!seen[$0]++'"],
+                                      cwd=self.project_root)).rstrip('\n').splitlines()
 
         if not remotes:
             return None
@@ -31,9 +41,9 @@ class Git(BaseVcs):
             valid_choices = ['abort', ] + list(remotes.keys())
 
             message = "%(question)s [%(remotes)s, Use `%(abort)s` to cancel]:" % {
-                'abort': colors.yellow('abort'),
-                'question': colors.red("Which remote to use?", bold=True),
-                'remotes': ', '.join([colors.green(x) for x in remotes.keys()]),
+                'abort': yellow('abort'),
+                'question': red("Which remote to use?", bold=True),
+                'remotes': ', '.join([green(x) for x in remotes.keys()]),
             }
 
             def validate_choice(val):
@@ -48,22 +58,21 @@ class Git(BaseVcs):
             if selected == 'abort':
                 abort('Aborted by user')
 
-            return remotes[selected]
+            return as_str(remotes[selected])
 
         else:
-            return self._get_remote_url(remotes[0]) or None
+            return as_str(self._get_remote_url(remotes[0])) or None
 
     def _get_remote_url(self, remote_name):
-        with lcd(self.project_root), hide('running'):
-            try:
-                result = local('git config --get remote.%s.url' % remote_name, capture=True)
+        try:
+            result = as_str(check_output(['sh', '-c', 'git config --get remote.%s.url' % remote_name], cwd=self.project_root)).rstrip('\n')
 
-            except SystemExit as e:
-                if e.code == 1:
-                    result = None
+        except CalledProcessError as e:
+            if e.returncode == 1:
+                result = None
 
-                else:
-                    raise  # pragma: no cover
+            else:
+                raise  # pragma: no cover
 
         return result or None
 
@@ -83,7 +92,7 @@ class Git(BaseVcs):
             self.update(revision)
 
     def version(self):
-        with cd(self.code_dir), hide('running'):
+        with self.cd(self.code_dir), self.hide('running'):
             sep = ':|:|:'
 
             commit_id, message, author = \
@@ -100,13 +109,13 @@ class Git(BaseVcs):
             candidates = self.remote_cmd(
                 'git for-each-ref --contains %s --format \'%%(refname)\' refs/remotes/' % commit_id
             ).strip().splitlines(False)
-        except SystemExit:
+        except UnexpectedExit:
             # Fall back to older way of determining the branch
             try:
                 candidates = self.remote_cmd(
                     'git branch --color=never -a --contains %s' % commit_id
                 ).strip().splitlines(False)
-            except SystemExit as e:
+            except UnexpectedExit as e:
                 # Previous command will exit with code 129 if the commit_id is invalid.
                 # All other exit codes MUST trigger a fatal error
                 if e.code != 129:
@@ -150,7 +159,7 @@ class Git(BaseVcs):
             if branch:
                 return [branch, ], None
 
-        except SystemExit as e:
+        except UnexpectedExit as e:
             # Previous command will exit with code 1 if in detached head state.
             # All other exit codes MUST trigger a fatal error
             if e.code != 1:
@@ -189,7 +198,7 @@ class Git(BaseVcs):
         return valid_branches, real_commit
 
     def get_branch(self, commit_id='HEAD', ambiguous=False):
-        with cd(self.code_dir), hide('running'):
+        with self.cd(self.code_dir), self.hide('running'):
 
             # Resolve 'HEAD' into a real commit_id so that the cache functions properly.
             if commit_id.lower() == 'head':
@@ -211,15 +220,15 @@ class Git(BaseVcs):
                     return '|'.join(valid_branches)
 
                 # Ask the user which one is valid
-                print(colors.yellow('Could not automatically determine remote git branch '
-                                    '(for %s), please pick the correct value' % real_commit or commit_id))
+                print(yellow('Could not automatically determine remote deployed git branch '
+                             '(for %s), please pick the correct value' % real_commit or commit_id))
                 print('Candidates are (use 0 to abort): %s' % (
                     ', '.join(['%d: %s' % (i + 1, x) for i, x in enumerate(valid_branches)])
                 ))
 
                 value = None
                 while value not in range(len(valid_branches) + 1):
-                    value = raw_input('Select value: ')
+                    value = ask_input('Select value: ')
 
                     try:
                         value = int(value)
@@ -243,7 +252,7 @@ class Git(BaseVcs):
                 return valid_branches[0]
 
     def pull(self):
-        with cd(self.code_dir):
+        with self.cd(self.code_dir):
             self.remote_cmd('git fetch origin')
 
     def has_revision(self, revision, locally=False):
@@ -269,6 +278,8 @@ class Git(BaseVcs):
                 self.remote_cmd(u'git show --no-pager {}'.format(revision))
                 has_branch = True
             except SystemExit:
+                return False
+            except UnexpectedExit:
                 return False
 
         return has_branch
@@ -303,14 +314,14 @@ class Git(BaseVcs):
                 assert len(revision) > 6
 
             except AssertionError:
-                abort(colors.red(self._commit_id_is_too_short(revision)))
+                abort(red(self._commit_id_is_too_short(revision)))
 
             except ValueError:
                 revision_is_branch = True
 
                 # Make sure that this branch exists in the remote repo.
                 if not self.has_revision(revision):
-                    abort(colors.red(self._no_revision_error(revision)))
+                    abort(red(self._no_revision_error(revision)))
 
                 # If this branch does not exist locally, we need to
                 # create it so that the branch searching alg. works.
@@ -319,7 +330,7 @@ class Git(BaseVcs):
                     cmd = u'git fetch origin {0}:{0}'.format(revision)
                     msg_tmpl = u'Not a commit ID and the branch exists remotely. ' \
                                u'Now creating this branch locally: {} with this command: {}'
-                    print(colors.yellow(msg_tmpl.format(revision, cmd)))
+                    print(yellow(msg_tmpl.format(revision, cmd)))
                     self.remote_cmd(cmd)
                     revision = u'origin/{}'.format(revision)
 
@@ -341,7 +352,7 @@ class Git(BaseVcs):
         if revision is None:
             revision = ''
 
-        with cd(self.code_dir), hide('running', 'stdout'):
+        with self.cd(self.code_dir), self.hide('running', 'stdout'):
             self.pull()
 
             revision, base_branch = self._get_revision_and_base_branch(revision)
@@ -349,14 +360,14 @@ class Git(BaseVcs):
             self.remote_cmd(u'git checkout {}'.format(revision))
 
     def get_all_branches(self, remote):
-        with cd(self.code_dir):
+        with self.cd(self.code_dir):
             all_branches = self.remote_cmd('git --no-pager branch%s --color=never' % (' -r' if remote else ' -l'), silent=True)
             all_branches = [x.strip() for x in all_branches.splitlines(False)]
 
             return set(list(filter(lambda y: y, map(self.normalize_branch, all_branches))))
 
     def get_commit_id(self):
-        with cd(self.code_dir):
+        with self.cd(self.code_dir):
             return self.remote_cmd('git --no-pager log -n 1 --oneline --pretty=%h', silent=True).strip()
 
     def git_what_branch(self, commit_id, remote=False):
@@ -366,7 +377,7 @@ class Git(BaseVcs):
         if self._branch_cache.get(commit_id, None) is not None:
             return [self._branch_cache[commit_id], ], commit_id
 
-        with cd(self.code_dir):
+        with self.cd(self.code_dir):
             all_branches = self.get_all_branches(remote=remote)
             valid_branches = []
 
@@ -381,7 +392,7 @@ class Git(BaseVcs):
                     if commit_log and commit_id in commit_log:  # pragma: no branch
                         valid_branches.append(branch)
 
-                except SystemExit as e:
+                except UnexpectedExit as e:
                     if e.code == 1:
                         continue
 
@@ -395,9 +406,9 @@ class Git(BaseVcs):
             revision = ''
 
         if revision.startswith('origin/'):
-            abort(colors.red(self._no_remote_revision_allowed_error(revision)))
+            abort(red(self._no_remote_revision_allowed_error(revision)))
 
-        with cd(self.code_dir), hide('running', 'stdout'):
+        with self.cd(self.code_dir), self.hide('running', 'stdout'):
             # First lets pull
             self.pull()
 
@@ -422,19 +433,20 @@ class Git(BaseVcs):
                 return {'message': "Already at target revision"}
 
     def _changed_files(self, revision_set):
-        with cd(self.code_dir):
-            result = self.remote_cmd("git --no-pager diff --name-status %s" % revision_set, quiet=True).splitlines()
+        with self.cd(self.code_dir):
+            result = self.remote_cmd("git --no-pager diff --name-status %s" % revision_set, silent=True).splitlines()
 
             return map(lambda x: x.replace('\t', ' '), result)
 
     def get_revset_log(self, revs, base_branch=None):
-        with cd(self.code_dir):
+        with self.cd(self.code_dir):
             result = self.remote_cmd("git --no-pager log --oneline --format='%%h {} %%an <%%ae> %%s' %s" % revs).strip()
 
             if result:
                 result = result.split('\n')
 
-                return map(lambda z: self.log_add_branch(z, base_branch=base_branch), filter(lambda y: y, [x.strip() for x in result]))
+                return list(map(lambda z: self.log_add_branch(z, base_branch=base_branch),
+                                filter(lambda y: y, [x.strip() for x in result])))
 
             return []
 
@@ -448,7 +460,7 @@ class Git(BaseVcs):
             return line  # pragma: no cover
 
         def get_branch():
-            print(colors.yellow(u'Figuring out branch for commit: {}'.format(line.replace('{}', '-'))))
+            print(yellow(u'Figuring out branch for commit: {}'.format(line.replace('{}', '-'))))
             return self.get_branch(commit_hash, ambiguous=True)
 
         # The line begins with commit hash and then "{}", thus we can be certain that the first occurrence of "{}" is

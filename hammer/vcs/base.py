@@ -1,7 +1,20 @@
 import re
+import sys
+
 import ftfy
 
-from fabric.api import sudo, run, env, hide
+from hammer.util import is_fabric1
+
+
+class DummyHide(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __enter__(self):
+        return None
+
+    def __exit__(self, type, value, traceback):
+        pass
 
 
 class BaseVcs(object):
@@ -13,17 +26,95 @@ class BaseVcs(object):
 
     def __init__(self, project_root, use_sudo=None, code_dir=None, **kwargs):
         self.project_root = project_root
-        self.code_dir = code_dir
         self.use_sudo = use_sudo
 
+        self._context = None
+
         if self.use_sudo is None:
-            self.use_sudo = getattr(env, 'use_sudo', False)
+            if is_fabric1:
+                from fabric.api import env
+                self.use_sudo = getattr(env, 'use_sudo', False)
+
+            else:
+                raise EnvironmentError('%s: Please provide code_dir (via init kwargs)' % self.NAME)
+
+        if is_fabric1:
+            from fabric.api import env
+
+            if code_dir is None:
+                self.code_dir = getattr(env, 'code_dir', None)
+
+            else:
+                self.code_dir = code_dir
+
+        else:
+            self.code_dir = code_dir
 
         if self.code_dir is None:
-            self.code_dir = getattr(env, 'code_dir', None)
+            raise EnvironmentError('%s: Please provide code_dir (via init kwargs%s)' % (self.NAME, ' or `env`' if is_fabric1 else ''))
 
-            if self.code_dir is None:
-                raise EnvironmentError('%s: Please provide code_dir (via `init_kwargs` or `env`)' % self.NAME)
+    @property
+    def context(self):
+        if self._context is None:
+            raise EnvironmentError('%s: Please attach fabric context with self.attach_context')
+
+        return self._context
+
+    @property
+    def run(self):
+        if is_fabric1:
+            from fabric.api import run
+            return run
+
+        else:
+            def wrapped(*args, **kwargs):
+                res = self.context.run(*args, **kwargs)
+
+                return res.stdout.rstrip('\n')
+
+            return wrapped
+
+    @property
+    def sudo(self):
+        if is_fabric1:
+            from fabric.api import sudo
+            return sudo
+
+        else:
+            def wrapped(*args, **kwargs):
+                res = self.context.sudo(*args, **kwargs)
+
+                return res.stdout.rstrip('\n')
+
+            return wrapped
+
+    @property
+    def cd(self):
+        if is_fabric1:
+            from fabric.api import cd
+            return cd
+
+        else:
+            return self.context.cd
+
+    @property
+    def hide(self):
+        if is_fabric1:
+            from fabric.api import hide
+            return hide
+
+        else:
+            # Hide is not available as a context manager on fabric2. One should use `hide` cli arg instead.
+            # FIXME: Figure out how to make this internal api work for both versions...
+            return DummyHide
+
+    def attach_context(self, context):
+        """Should be called from server fabric task (like test or live)
+
+        :param context:
+        :return:
+        """
+        self._context = context
 
     def repo_url(self):
         """ Retrieve Url of the remote repository (origin|default). If remote url can't be determined None is returned.
@@ -99,8 +190,13 @@ class BaseVcs(object):
         silent = kwargs.pop('silent', False)
 
         if silent:
-            with hide('running', 'stderr', 'stdout'):
-                kwargs['quiet'] = True
+            with self.hide('running', 'stderr', 'stdout'):
+                if is_fabric1:
+                    kwargs['quiet'] = True
+
+                else:
+                    kwargs['hide'] = True
+                    kwargs['echo'] = False
 
                 return self._remote_cmd(*args, **kwargs)
 
@@ -109,14 +205,18 @@ class BaseVcs(object):
 
     @classmethod
     def cleanup_command_result(cls, result):
+        # FIXME: Seems we can't get the raw bytes from a command result anymore - but ftfy wants bytes as its input. skipping ftfy for now
+        if sys.version_info >= (3, 0):
+            return result
+
         return ftfy.fix_text(ftfy.guess_bytes(result)[0])
 
     def _remote_cmd(self, *args, **kwargs):
         if not self.use_sudo:  # pragma: no cover
-            return self.cleanup_command_result(run(*args, **kwargs))
+            return self.cleanup_command_result(self.run(*args, **kwargs))
 
         else:
-            return self.cleanup_command_result(sudo(*args, **kwargs))  # pragma: no cover
+            return self.cleanup_command_result(self.sudo(*args, **kwargs))  # pragma: no cover
 
     def _changed_files(self, revision_set):
         raise NotImplementedError  # pragma: no cover

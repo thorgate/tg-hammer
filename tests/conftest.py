@@ -4,6 +4,7 @@ import subprocess
 
 import pytest
 
+from hammer.util import is_fabric1, as_str
 from hammer.vcs import Vcs
 
 
@@ -48,8 +49,11 @@ class VcsTestUtil(object):
     def user_full(self):
         return '%s <%s>' % (self.user_name, self.user_email)
 
-    def get_vcs(self, code_dir=None):
-        return Vcs.init(project_root=self.repo_dir, code_dir=code_dir if code_dir else '/srv/%s_project' % self.vcs_type, use_sudo=False)
+    def get_vcs(self, code_dir=None, context=None):
+        vcs = Vcs.init(project_root=self.repo_dir, code_dir=code_dir if code_dir else '/srv/%s_project' % self.vcs_type, use_sudo=False)
+        vcs.attach_context(context)
+
+        return vcs
 
     def init_empty_repo(self):
         if self.vcs_type == 'git':
@@ -70,23 +74,23 @@ class VcsTestUtil(object):
             subprocess.check_output('git status'.split(), cwd=self.repo_dir)
 
             # Test that we don't accidentally create a false positive here, when hammer is using git as a vcs
-            return subprocess.check_output('git rev-parse --show-toplevel'.split(), cwd=self.repo_dir).strip() == self.repo_dir
+            return as_str(subprocess.check_output('git rev-parse --show-toplevel'.split(), cwd=self.repo_dir)).strip() == self.repo_dir
 
         else:
             subprocess.check_output('hg status'.split(), cwd=self.repo_dir)
 
             # Test that we don't accidentally create a false positive here, when hammer is using hg as a vcs
-            return subprocess.check_output('hg root'.split(), cwd=self.repo_dir).strip() == self.repo_dir
+            return as_str(subprocess.check_output('hg root'.split(), cwd=self.repo_dir).strip()) == self.repo_dir
 
     def get_commit_messages(self):
         if self.vcs_type == 'git':
-            logs = subprocess.check_output("git log --oneline --format=%s".split(), cwd=self.repo_dir).strip().split('\n')
+            logs = as_str(subprocess.check_output("git log --oneline --format=%s".split(), cwd=self.repo_dir)).strip().split('\n')
             logs = [x.strip(' "\'') for x in logs]
 
             return logs
 
         else:
-            logs = subprocess.check_output("hg log --template '{desc|firstline}\\n'".split(), cwd=self.repo_dir).strip().split('\n')
+            logs = as_str(subprocess.check_output("hg log --template '{desc|firstline}\\n'".split(), cwd=self.repo_dir)).strip().split('\n')
             logs = [y for y in [x.strip(' "\'\n') for x in logs] if y]
 
             return logs
@@ -159,11 +163,12 @@ class VcsTestUtil(object):
 
     def get_and_store_latest_hash(self, key):
         if self.vcs_type == 'git':
-            self.commit_hash[key] = subprocess.check_output("git --no-pager log -n 1 --oneline --format='%h'".split(),
-                                                            cwd=self.repo_dir).strip().strip('"\'').strip()
+            output = as_str(subprocess.check_output("git --no-pager log -n 1 --oneline --format='%h'".split(), cwd=self.repo_dir))
+
+            self.commit_hash[key] = output.strip().strip('"\'').strip()
 
         else:
-            out = subprocess.check_output('hg id -in'.split(), cwd=self.repo_dir).strip()
+            out = as_str(subprocess.check_output('hg id -in'.split(), cwd=self.repo_dir)).strip()
             out = out.split()
             out.reverse()
             self.commit_hash[key] = ':'.join([x for x in out if x])
@@ -222,3 +227,20 @@ def repo(repo_type):
     setattr(obj, '_real_dir', '.git' if repo_type == 'git' else '.hg')
 
     return obj
+
+
+@pytest.fixture(scope='function')
+def get_context(monkeypatch):
+    def _get_context(hostname):
+        if is_fabric1:
+            monkeypatch.setattr('fabric.state.env.host_string', hostname)
+            monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+
+            return None
+
+        else:
+            from fabric import Connection
+
+            return Connection(host=hostname)
+
+    return _get_context

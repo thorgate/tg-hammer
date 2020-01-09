@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from hammer.util import UnexpectedExit, Exit
+
 
 def test_fixture_correct_data(repo):
     if repo.vcs_type == 'git':
@@ -41,8 +43,10 @@ def test_vcs_detect(repo):
     assert obj.TAG == repo.vcs_type
 
 
-def test_vcs_remote_url(repo):
-    obj = repo.get_vcs()
+def test_vcs_remote_url(repo, get_context):
+    context = get_context('staging.hammer')
+
+    obj = repo.get_vcs(context=context)
 
     # Should return None if no remote url
     assert obj.repo_url() is None
@@ -51,21 +55,19 @@ def test_vcs_remote_url(repo):
     repo.add_remote()
 
     # Check it again
-    assert obj.repo_url() == repo.expected_remote
+    got = obj.repo_url()
+    assert got == repo.expected_remote
 
     # Push to remote (actually just a different dir on the master machine)
     repo.push()
 
 
-def test_vcs_clone(repo, monkeypatch):
+def test_vcs_clone(repo, get_context):
     # set host string
-    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+    context = get_context('staging.hammer')
 
-    from fabric.api import sudo
-    sudo('rm -rf /srv/%s_project' % repo.vcs_type)
-
-    obj = repo.get_vcs()
+    obj = repo.get_vcs(context=context)
+    obj.sudo('rm -rf /srv/%s_project' % repo.vcs_type)
     obj.clone()
 
     # Also test vcs_version result
@@ -82,7 +84,7 @@ def test_vcs_clone(repo, monkeypatch):
     assert obj.get_branch() == repo.default_branch
 
 
-def test_vcs_deploy(repo, monkeypatch):
+def test_vcs_deploy(repo, get_context):
     # make another commit
     repo.store_commit_hash('5.txt')
 
@@ -93,11 +95,10 @@ def test_vcs_deploy(repo, monkeypatch):
     repo.push()
 
     # set host string
-    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+    context = get_context('staging.hammer')
 
     # Run deploy
-    obj = repo.get_vcs()
+    obj = repo.get_vcs(context=context)
 
     # Remember the version info
     version_info = list(obj.version())
@@ -151,7 +152,7 @@ def test_vcs_deploy(repo, monkeypatch):
     assert obj.get_branch() == repo.default_branch
 
 
-def test_stable_branch(repo, monkeypatch):
+def test_stable_branch(repo, get_context):
     # make another commit (stable branch)
     repo.store_commit_hash('stable-1', branch='stable')
     assert repo.commit_hash.get('stable-1', None)
@@ -163,16 +164,14 @@ def test_stable_branch(repo, monkeypatch):
     repo.push()
 
     # Setup another server on the target host
-    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+    context = get_context('staging.hammer')
 
     # get vcs object and set a new code dir
-    obj = repo.get_vcs(code_dir='/srv/%s_stable' % repo.vcs_type)
+    obj = repo.get_vcs(code_dir='/srv/%s_stable' % repo.vcs_type, context=context)
     assert obj.code_dir == '/srv/%s_stable' % repo.vcs_type
 
     # Ensure target is empty
-    from fabric.api import sudo
-    sudo('rm -rf %s' % obj.code_dir)
+    obj.sudo('rm -rf %s' % obj.code_dir)
 
     # deploy stable branch to target
     obj.clone('stable')
@@ -391,7 +390,7 @@ def test_stable_branch(repo, monkeypatch):
     ]
 
 
-def test_vcs_deploy_with_branchname(repo, monkeypatch):
+def test_vcs_deploy_with_branchname(repo, get_context):
     if repo.vcs_type == 'git':
         branch_name = 'featureXXX/YYY/ZZZ'
 
@@ -405,11 +404,10 @@ def test_vcs_deploy_with_branchname(repo, monkeypatch):
         repo.push(branch=branch_name)
 
         # set host string
-        monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-        monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+        context = get_context('staging.hammer')
 
         # Run deploy
-        obj = repo.get_vcs()
+        obj = repo.get_vcs(context=context)
 
         # Run deploy with branch name
         obj.update(revision=branch_name)
@@ -429,25 +427,24 @@ def test_vcs_deploy_with_branchname(repo, monkeypatch):
         obj.update(repo.default_branch)
 
 
-def test_vcs_deploy_with_wrong_branchname_or_revision(repo, monkeypatch):
+def test_vcs_deploy_with_wrong_branchname_or_revision(repo, get_context):
     if repo.vcs_type == 'git':
         # set host string
-        monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-        monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
+        context = get_context('staging.hammer')
 
         # Run deploy
-        obj = repo.get_vcs()
+        obj = repo.get_vcs(context=context)
 
         # Run deploy with branch that does not exist in origin.
-        with pytest.raises(SystemExit):
+        with pytest.raises(Exit):
             obj.update(revision='feature-branch/does-not-exist-in-remove-server')
 
         # Run deploy with a revision hash that does not exist in the repo.
-        with pytest.raises(SystemExit):
+        with pytest.raises(UnexpectedExit):
             obj.update(revision='4c92374f88ad10bf4b658355d2784540e4192927')
 
 
-def test_vcs_deployment_list(repo, monkeypatch):
+def test_vcs_deployment_list(repo, get_context):
     branch_name = 'top_secret'
 
     # Make a commit to top_secret
@@ -469,9 +466,8 @@ def test_vcs_deployment_list(repo, monkeypatch):
     repo.push(branch=repo.default_branch)
 
     # set host string
-    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
-    obj = repo.get_vcs()
+    context = get_context('staging.hammer')
+    obj = repo.get_vcs(context=context)
 
     # Need to do this to avoid asking the user which branch to use.
     original_get_branch = obj._real.get_branch
@@ -517,28 +513,27 @@ def test_vcs_deployment_list(repo, monkeypatch):
     assert list_without_hashes == ['{} Testing user <test@test.sdf> 10.txt'.format(branch_name)]
 
 
-def test_deployment_list_revision_flag(repo, monkeypatch):
+def test_deployment_list_revision_flag(repo, get_context):
     # set host string
-    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
-    obj = repo.get_vcs()
+    context = get_context('staging.hammer')
+    obj = repo.get_vcs(context=context)
 
     evil_branch = 'feature-branch/does-not-exist-in-remove-server'
 
     # Test if adding a commit_id that does exist fails appropriately.
-    with pytest.raises(SystemExit):
+    with pytest.raises(UnexpectedExit):
         obj.deployment_list(revision='4c92374f88ad10bf4b658355d2784540e4192927')
 
     # Test if adding a short commit_id fails appropriately.
-    with pytest.raises(SystemExit):
+    with pytest.raises(Exit):
         obj.deployment_list(revision='4c9237')
 
     # Test that deploying a branch that starts with origin fails appropriately.
-    with pytest.raises(SystemExit):
+    with pytest.raises(Exit):
         obj.deployment_list(revision='origin/{}'.format(evil_branch))
 
     # Test if adding a commit_id that does exist in the repo fails appropriately.
-    with pytest.raises(SystemExit):
+    with pytest.raises(Exit):
         obj.deployment_list(revision=evil_branch)
 
     # get reverse log
@@ -577,9 +572,8 @@ def test_deployment_list_revision_flag(repo, monkeypatch):
     obj.update(target_version)
 
 
-def test_multiple_commits_question(repo, monkeypatch):
+def test_multiple_commits_question(repo, monkeypatch, get_context):
     if repo.vcs_type == 'git':
-
         repo.store_commit_hash('12.txt', branch=['master'])
         repo.merge_to_stable('1:merge->stable')
         assert repo.commit_hash.get('1:merge->stable', None)
@@ -588,9 +582,9 @@ def test_multiple_commits_question(repo, monkeypatch):
         repo.push(branch='stable')
 
         # set host string
-        monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-        monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
-        obj = repo.get_vcs()
+        context = get_context('staging.hammer')
+
+        obj = repo.get_vcs(context=context)
         obj.update(repo.commit_hash['1:merge->stable'])
 
         branch = obj.get_branch(repo.commit_hash['1:merge->stable'])
@@ -610,14 +604,15 @@ def test_multiple_commits_question(repo, monkeypatch):
         assert branch == 'very_very_very_stable', repr((branch, 'very_very_very_stable'))
 
 
-def test_commit_messages_with_formatting_chars(repo, monkeypatch):
+def test_commit_messages_with_formatting_chars(repo, get_context):
     repo.store_commit_hash('HELLO %', branch=[repo.default_branch])
     repo.store_commit_hash('Commit {} message', branch=[repo.default_branch])
     repo.store_commit_hash('Django {% include %} template', branch=[repo.default_branch])
     repo.push(branch=repo.default_branch)
-    monkeypatch.setattr('fabric.state.env.host_string', 'staging.hammer')
-    monkeypatch.setattr('fabric.state.env.use_ssh_config', True)
-    obj = repo.get_vcs()
+
+    context = get_context('staging.hammer')
+
+    obj = repo.get_vcs(context=context)
 
     # This line failed before fixing the percent sign error.
     obj.deployment_list(revision=repo.commit_hash['HELLO %'])
@@ -627,7 +622,7 @@ def test_commit_messages_with_formatting_chars(repo, monkeypatch):
     obj.deployment_list(revision=repo.commit_hash['Django {% include %} template'])
 
 
-def test_normalize_does_not_fail_when_detached_in_branch_name(repo, monkeypatch):
+def test_normalize_does_not_fail_when_detached_in_branch_name(repo):
     if repo.vcs_type == 'git':
         bad_branches = ['blaw blaw blaw detached at blaw blaw blaw', 'blaw blaw blaw detached from blaw blaw blaw']
 

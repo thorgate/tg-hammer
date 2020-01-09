@@ -17,7 +17,8 @@ from subprocess import check_output, CalledProcessError
 from collections import deque
 from itertools import chain
 from ipaddress import IPv4Network, IPv4Interface
-from fabric.api import sudo
+
+from hammer.util import is_fabric1
 
 __all__ = ['create_docker_network', 'DockerNetworkAllocator', 'OutOfNetworks']
 
@@ -32,11 +33,17 @@ class OutOfNetworks(RuntimeError):
     pass
 
 
-def remote_cmd(cmd):
-    # Fabric doesn't have any way to call commands with
-    # an actual list of arguments, and their shell_escape is
-    # a complete joke...
-    res = sudo(cmd)
+def remote_cmd(cmd, context=None):
+    if is_fabric1:
+        from fabric.api import sudo
+
+        # Fabric doesn't have any way to call commands with
+        # an actual list of arguments, and their shell_escape is
+        # a complete joke...
+        res = sudo(cmd)
+
+    else:
+        res = context.sudo(cmd)
 
     if res.return_code != 0:
         raise CalledProcessError(
@@ -47,18 +54,21 @@ def remote_cmd(cmd):
     return res.stdout
 
 
-def local_cmd(cmd):
+def local_cmd(cmd, context=None):
     # I know... see remote_cmd
     return check_output(['sh', '-c', cmd])
 
 
-def create_docker_network(name, internal=False, cmd=remote_cmd, prefix=24, pool=None):
-    allocator = DockerNetworkAllocator(cmd, pool=pool)
+def create_docker_network(name, internal=False, cmd=remote_cmd, prefix=24, pool=None, context=None):
+    """
+    Note: With fabric2 the context argument must be set to is Connection
+    """
+    allocator = DockerNetworkAllocator(cmd, context=None, pool=pool)
     return allocator.create(name, internal=internal, prefix=prefix)
 
 
 class DockerNetworkAllocator(object):
-    def __init__(self, cmd, pool=None):
+    def __init__(self, cmd, context=None, pool=None):
         """
         Docker network allocator
 
@@ -67,6 +77,7 @@ class DockerNetworkAllocator(object):
             pool(List[IPv4Network]): Pool of networks to assign from
         """
         self._cmd = cmd
+        self._context = context
 
         if pool is None:
             pool = DEFAULT_NETWORK_POOL
@@ -77,7 +88,7 @@ class DockerNetworkAllocator(object):
     def _docker(self, args):
         # lord have mercy
         cmd = ' '.join("'{}'".format(arg) for arg in chain(['docker'], args))
-        output = self._cmd(cmd).decode('utf8').strip()
+        output = self._cmd(cmd, context=self._context).decode('utf8').strip()
 
         if output == '':
             return []
@@ -89,13 +100,13 @@ class DockerNetworkAllocator(object):
             (
                 # Locally used networks
                 IPv4Interface(inet).network
-                for inet in self._cmd("ip -4 addr | grep 'inet ' | awk '{ print $2 }'").split()
+                for inet in self._cmd("ip -4 addr | grep 'inet ' | awk '{ print $2 }'", context=self._context).split()
                 if inet != ''
             ),
             (
                 # Already routed ipv4 networks
                 IPv4Network(network)
-                for network in self._cmd("ip -4 route list | grep '^[0-9]' | awk '{ print $1 }'").split()
+                for network in self._cmd("ip -4 route list | grep '^[0-9]' | awk '{ print $1 }'", context=self._context).split()
                 if network != ''
             )
         ))
@@ -155,6 +166,6 @@ class DockerNetworkAllocator(object):
             ('docker', 'network', 'create'),
             ('--internal',) if internal else (),
             ('--subnet', self.assign(prefix=prefix).exploded, name))
-        self._cmd(' '.join(cmd))
+        self._cmd(' '.join(cmd), context=self._context)
 
         return True
