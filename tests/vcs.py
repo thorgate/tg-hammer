@@ -590,7 +590,8 @@ def test_multiple_commits_question(repo, monkeypatch, get_context):
         branch = obj.get_branch(repo.commit_hash['1:merge->stable'])
         assert branch == 'stable'
 
-        monkeypatch.setattr('__builtin__.raw_input', lambda x: '2')
+        monkeypatch.setattr('hammer.vcs.git.ask_input', lambda x: '2')
+
         branch = obj.get_branch(repo.commit_hash['12.txt'])
         assert branch == 'stable'
 
