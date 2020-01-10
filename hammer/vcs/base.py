@@ -29,6 +29,7 @@ class BaseVcs(object):
         self.use_sudo = use_sudo
 
         self._context = None
+        self._code_dir = None
 
         if self.use_sudo is None:
             if is_fabric1:
@@ -36,22 +37,15 @@ class BaseVcs(object):
                 self.use_sudo = getattr(env, 'use_sudo', False)
 
             else:
-                raise EnvironmentError('%s: Please provide code_dir (via init kwargs)' % self.NAME)
+                raise EnvironmentError('%s: Please provide use_sudo (via init kwargs)' % self.NAME)
 
-        if is_fabric1:
+        if code_dir is None and is_fabric1:
             from fabric.api import env
 
-            if code_dir is None:
-                self.code_dir = getattr(env, 'code_dir', None)
-
-            else:
-                self.code_dir = code_dir
+            self.set_code_dir(getattr(env, 'code_dir', None))
 
         else:
-            self.code_dir = code_dir
-
-        if self.code_dir is None:
-            raise EnvironmentError('%s: Please provide code_dir (via init kwargs%s)' % (self.NAME, ' or `env`' if is_fabric1 else ''))
+            self.set_code_dir(code_dir)
 
     @property
     def context(self):
@@ -59,6 +53,54 @@ class BaseVcs(object):
             raise EnvironmentError('%s: Please attach fabric context with self.attach_context')
 
         return self._context
+
+    def attach_context(self, context):
+        """Bind fabric context to vcs
+
+        This should be called from server fabric task (like test or live), for example:
+
+        >>> vcs = Vcs.init(project_root=os.path.dirname(os.path.dirname(__file__)), use_sudo=True)
+        >>>
+        >>> @task(alias='test')
+        >>> def staging(c):
+        >>>     defaults(c)
+        >>>     env.hosts = ['foo.bar.baz']
+        >>>
+        >>>     vcs.attach_context(c)
+        >>>     ...
+
+        :param context: Fabric Connection - http://docs.fabfile.org/en/2.5/api/connection.html#fabric.connection.Connection
+        :return:
+        """
+        self._context = context
+
+    @property
+    def code_dir(self):
+        if self._code_dir is None:
+            raise EnvironmentError('%s: Please provide code_dir (via init kwargs / set_code_dir%s)' % (self.NAME,
+                                                                                                       ' / `env`' if is_fabric1 else ''))
+
+        return self._code_dir
+
+    def set_code_dir(self, code_dir):
+        """
+        This should be called from server fabric task (like test or live), for example:
+
+        >>> vcs = Vcs.init(project_root=os.path.dirname(os.path.dirname(__file__)), use_sudo=True)
+        >>>
+        >>> @task(alias='test')
+        >>> def staging(c):
+        >>>     defaults(c)
+        >>>     env.hosts = ['foo.bar.baz']
+        >>>
+        >>>     vcs.attach_context(c)
+        >>>     vcs.set_code_dir('/srv/myproject')
+        >>>     ...
+
+        :param code_dir: Repository directory on the remote machine
+        :type code_dir: str
+        """
+        self._code_dir = code_dir
 
     @property
     def run(self):
@@ -107,14 +149,6 @@ class BaseVcs(object):
             # Hide is not available as a context manager on fabric2. One should use `hide` cli arg instead.
             # FIXME: Figure out how to make this internal api work for both versions...
             return DummyHide
-
-    def attach_context(self, context):
-        """Should be called from server fabric task (like test or live)
-
-        :param context:
-        :return:
-        """
-        self._context = context
 
     def repo_url(self):
         """ Retrieve Url of the remote repository (origin|default). If remote url can't be determined None is returned.
@@ -238,7 +272,7 @@ class BaseVcs(object):
             def finder(pattern):
                 regex = re.compile(pattern)
 
-                return filter(lambda filename: regex.search(filename), result)
+                return list(filter(lambda filename: regex.search(filename), result))
 
             if isinstance(filter_re, (list, tuple)):
                 full_result = []

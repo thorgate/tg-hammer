@@ -348,6 +348,7 @@ def test_stable_branch(repo, get_context):
 
     # Test changed files with multi regex
     files = obj.changed_files(result['revset'], [r'^A .+\.png$', r'^M '])
+
     assert sorted(files) == [
         'A dogs.png',
         'M 3.txt',
@@ -524,16 +525,17 @@ def test_deployment_list_revision_flag(repo, get_context):
     with pytest.raises(UnexpectedExit):
         obj.deployment_list(revision='4c92374f88ad10bf4b658355d2784540e4192927')
 
-    # Test if adding a short commit_id fails appropriately.
-    with pytest.raises(Exit):
-        obj.deployment_list(revision='4c9237')
+    if repo.vcs_type == 'git':
+        # Test that adding a short commit_id fails appropriately.
+        with pytest.raises(Exit):
+            obj.deployment_list(revision='4c9237')
 
-    # Test that deploying a branch that starts with origin fails appropriately.
-    with pytest.raises(Exit):
-        obj.deployment_list(revision='origin/{}'.format(evil_branch))
+        # Test that deploying a branch which starts with origin fails appropriately.
+        with pytest.raises(Exit):
+            obj.deployment_list(revision='origin/{}'.format(evil_branch))
 
-    # Test if adding a commit_id that does exist in the repo fails appropriately.
-    with pytest.raises(Exit):
+    # Test that adding a commit_id which does exist in the repo fails appropriately.
+    with pytest.raises(Exit if repo.vcs_type == 'git' else UnexpectedExit):
         obj.deployment_list(revision=evil_branch)
 
     # get reverse log
