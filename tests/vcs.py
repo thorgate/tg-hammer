@@ -439,7 +439,7 @@ def test_vcs_deploy_with_wrong_branchname_or_revision(repo, get_context):
 
         # Run deploy with branch that does not exist in origin.
         with pytest.raises(Exit):
-            obj.update(revision='feature-branch/does-not-exist-in-remove-server')
+            obj.update(revision='feature-branch/does-not-exist-in-remote-server')
 
         # Run deploy with a revision hash that does not exist in the repo.
         with pytest.raises(UnexpectedExit):
@@ -520,7 +520,7 @@ def test_deployment_list_revision_flag(repo, get_context):
     context = get_context('staging.hammer')
     obj = repo.get_vcs(context=context)
 
-    evil_branch = 'feature-branch/does-not-exist-in-remove-server'
+    evil_branch = 'feature-branch/does-not-exist-in-remote-server'
 
     # Test if adding a commit_id that does exist fails appropriately.
     with pytest.raises(UnexpectedExit):

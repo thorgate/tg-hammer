@@ -92,12 +92,12 @@ class Git(BaseVcs):
             self.update(revision)
 
     def version(self):
-        with self.cd(self.code_dir), self.hide('running'):
+        with self.cd(self.code_dir):
             sep = ':|:|:'
 
             commit_id, message, author = \
                 self.remote_cmd(("git --no-pager log -n 1 --oneline "
-                                 "--format='%%h%(sep)s%%s%(sep)s%%an <%%ae>'") % dict(sep=sep)).split(sep)
+                                 "--format='%%h%(sep)s%%s%(sep)s%%an <%%ae>'") % dict(sep=sep), silent=True).split(sep)
 
             branch = self.get_branch('HEAD')
 
@@ -109,13 +109,15 @@ class Git(BaseVcs):
         # Attempt to figure out the branch/branches via git branch --contains
         try:
             candidates = self.remote_cmd(
-                'git for-each-ref --contains %s --format \'%%(refname)\' refs/remotes/' % commit_id
+                'git for-each-ref --contains %s --format \'%%(refname)\' refs/remotes/' % commit_id,
+                silent=True,
             ).strip().splitlines(False)
         except UnexpectedExit:
             # Fall back to older way of determining the branch
             try:
                 candidates = self.remote_cmd(
-                    'git branch --color=never -a --contains %s' % commit_id
+                    'git branch --color=never -a --contains %s' % commit_id,
+                    silent=True,
                 ).strip().splitlines(False)
             except UnexpectedExit as e:
                 # Previous command will exit with code 129 if the commit_id is invalid.
@@ -168,7 +170,7 @@ class Git(BaseVcs):
                 raise  # pragma: no cover
 
         # Attempt to figure out the branch using git log
-        res = self.remote_cmd("git --no-pager log -n 1 --oneline --pretty=%%d %s" % commit_id).strip(' ()').split(',')
+        res = self.remote_cmd("git --no-pager log -n 1 --oneline --pretty=%%d %s" % commit_id, silent=True).strip(' ()').split(',')
         res = [y for y in [x.strip() for x in res] if y]
         valid_branches = []
         real_commit = None
@@ -200,7 +202,7 @@ class Git(BaseVcs):
         return valid_branches, real_commit
 
     def get_branch(self, commit_id='HEAD', ambiguous=False):
-        with self.cd(self.code_dir), self.hide('running'):
+        with self.cd(self.code_dir):
 
             # Resolve 'HEAD' into a real commit_id so that the cache functions properly.
             if commit_id.lower() == 'head':
@@ -333,7 +335,7 @@ class Git(BaseVcs):
                     msg_tmpl = u'Not a commit ID and the branch exists remotely. ' \
                                u'Now creating this branch locally: {} with this command: {}'
                     print(yellow(msg_tmpl.format(revision, cmd)))
-                    self.remote_cmd(cmd)
+                    self.remote_cmd(cmd, silent=True)
                     revision = u'origin/{}'.format(revision)
 
         # If no revision was given we should use the local branch.
@@ -354,7 +356,7 @@ class Git(BaseVcs):
         if revision is None:
             revision = ''
 
-        with self.cd(self.code_dir), self.hide('running', 'stdout'):
+        with self.cd(self.code_dir):
             self.pull()
 
             revision, base_branch = self._get_revision_and_base_branch(revision)
@@ -410,7 +412,7 @@ class Git(BaseVcs):
         if revision.startswith('origin/'):
             abort(red(self._no_remote_revision_allowed_error(revision)))
 
-        with self.cd(self.code_dir), self.hide('running', 'stdout'):
+        with self.cd(self.code_dir):
             # First lets pull
             self.pull()
 
@@ -442,7 +444,7 @@ class Git(BaseVcs):
 
     def get_revset_log(self, revs, base_branch=None):
         with self.cd(self.code_dir):
-            result = self.remote_cmd("git --no-pager log --oneline --format='%%h {} %%an <%%ae> %%s' %s" % revs).strip()
+            result = self.remote_cmd("git --no-pager log --oneline --format='%%h {} %%an <%%ae> %%s' %s" % revs, silent=True).strip()
 
             if result:
                 result = result.split('\n')
