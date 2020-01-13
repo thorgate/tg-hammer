@@ -5,15 +5,38 @@ import ftfy
 from hammer.util import is_fabric1
 
 
-class DummyHide(object):
-    def __init__(self, *args, **kwargs):
-        pass
+class ForceSilent(object):
+    """
+    The core concept of “output levels” is gone on fabric2 - see: https://www.fabfile.org/upgrading.html#upgrading
+
+    To mimic behaviour of old fabric we just use our own context manager which updates `silence` value of vcs instance. All commands that
+     are executed by vcs check the self.silence and silence their output if it is True.
+    """
+    def __init__(self, vcs_instance, *args, **kwargs):
+        self.vcs = vcs_instance
 
     def __enter__(self):
+        self.vcs.silence = True
+
         return None
 
     def __exit__(self, type, value, traceback):
-        pass
+        self.vcs.silence = False
+
+
+class SudoCWDContext(object):
+    def __init__(self, vcs_instance, path):
+        self.vcs = vcs_instance
+
+        self.path = path
+
+    def __enter__(self):
+        self.vcs.cmd_cwd_stack.append(self.path)
+
+        return None
+
+    def __exit__(self, type, value, traceback):
+        self.vcs.cmd_cwd_stack.pop(-1)
 
 
 class BaseVcs(object):
@@ -30,6 +53,9 @@ class BaseVcs(object):
         self._context = None
         self._code_dir = None
 
+        self.silence = False
+        self.cmd_cwd_stack = []
+
         if self.use_sudo is None:
             if is_fabric1:
                 from fabric.api import env
@@ -45,6 +71,13 @@ class BaseVcs(object):
 
         else:
             self.set_code_dir(code_dir)
+
+    @property
+    def cmd_cwd(self):
+        if self.cmd_cwd_stack:
+            return self.cmd_cwd_stack[-1]
+
+        return None
 
     @property
     def context(self):
@@ -99,36 +132,61 @@ class BaseVcs(object):
         """
         self._code_dir = code_dir
 
-    @property
-    def run(self):
+    def run(self, command, **kwargs):
+        if self.cmd_cwd:
+            with self.real_cd(self.cmd_cwd):
+                return self._run(command, **kwargs)
+
+        return self._run(command, **kwargs)
+
+    def _run(self, command, **kwargs):
         if is_fabric1:
             from fabric.api import run
-            return run
+            return run(command, **kwargs)
 
         else:
-            def wrapped(*args, **kwargs):
-                res = self.context.run(*args, **kwargs)
+            def wrapped(w_command, **w_kwargs):
+                res = self.context.run(w_command, **w_kwargs)
 
                 return res.stdout.rstrip('\n')
 
-            return wrapped
+            return wrapped(command, **kwargs)
 
-    @property
-    def sudo(self):
+    def sudo(self, command, **kwargs):
         if is_fabric1:
             from fabric.api import sudo
-            return sudo
+
+            if self.cmd_cwd:
+                with self.real_cd(self.cmd_cwd):
+                    return sudo(command, **kwargs)
+
+            return sudo(command, **kwargs)
 
         else:
-            def wrapped(*args, **kwargs):
-                res = self.context.sudo(*args, **kwargs)
+            def wrapped(w_command, **w_kwargs):
+                # Workaround for https://github.com/pyinvoke/invoke/issues/459
+                # Once the issue is resolved in upstream we can make self.cd use builtin c.cd again and remove self.cmd_cwd
+                #  and SudoCWDContext class
+                if self.cmd_cwd:
+                    w_command = ['bash -c "cd ' + self.cmd_cwd + ' && ' + w_command + '"']
+
+                res = self.context.sudo(w_command, **w_kwargs)
 
                 return res.stdout.rstrip('\n')
 
-            return wrapped
+            return wrapped(command, **kwargs)
+
+    def cd(self, path):
+        if is_fabric1:
+            from fabric.api import cd
+            return cd(path)
+
+        else:
+            # Workaround for https://github.com/pyinvoke/invoke/issues/459
+            return SudoCWDContext(self, path)
 
     @property
-    def cd(self):
+    def real_cd(self):
         if is_fabric1:
             from fabric.api import cd
             return cd
@@ -136,16 +194,15 @@ class BaseVcs(object):
         else:
             return self.context.cd
 
-    @property
-    def hide(self):
+    def hide(self, *args, **kwargs):
         if is_fabric1:
             from fabric.api import hide
-            return hide
+            return hide(*args, **kwargs)
 
         else:
-            # Hide is not available as a context manager on fabric2. One should use `hide` cli arg instead.
-            # FIXME: Figure out how to make this internal api work for both versions...
-            return DummyHide
+            # Hide is not available as a context manager on fabric2 and one should use `hide` cli arg instead.
+            #  Read more from ForceSilent docstring
+            return ForceSilent(self, *args, **kwargs)
 
     def repo_url(self):
         """ Retrieve Url of the remote repository (origin|default). If remote url can't be determined None is returned.
@@ -217,10 +274,10 @@ class BaseVcs(object):
 
         raise NotImplementedError  # pragma: no cover
 
-    def remote_cmd(self, *args, **kwargs):
+    def remote_cmd(self, command, **kwargs):
         silent = kwargs.pop('silent', False)
 
-        if silent:
+        if silent or self.silence:
             with self.hide('running', 'stderr', 'stdout'):
                 if is_fabric1:
                     kwargs['quiet'] = True
@@ -229,10 +286,10 @@ class BaseVcs(object):
                     kwargs['hide'] = True
                     kwargs['echo'] = False
 
-                return self._remote_cmd(*args, **kwargs)
+                return self._remote_cmd(command, **kwargs)
 
         else:
-            return self._remote_cmd(*args, **kwargs)
+            return self._remote_cmd(command, **kwargs)
 
     @classmethod
     def cleanup_command_result(cls, result):
@@ -240,12 +297,12 @@ class BaseVcs(object):
 
         return ftfy.fix_text(str_result)
 
-    def _remote_cmd(self, *args, **kwargs):
-        if not self.use_sudo:  # pragma: no cover
-            return self.cleanup_command_result(self.run(*args, **kwargs))
+    def _remote_cmd(self, command, **kwargs):
+        if self.use_sudo:
+            return self.cleanup_command_result(self.sudo(command, **kwargs))
 
-        else:
-            return self.cleanup_command_result(self.sudo(*args, **kwargs))  # pragma: no cover
+        else:  # pragma: no cover
+            return self.cleanup_command_result(self.run(command, **kwargs))
 
     def _changed_files(self, revision_set):
         raise NotImplementedError  # pragma: no cover
