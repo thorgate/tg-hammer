@@ -16,8 +16,7 @@ notifications:
     email: false
 
 after_success:
-  - pip install coveralls
-  - coveralls
+  - test $PYTHON_VERSION = "3.8" && pip install coveralls && coveralls
 
 jobs:
   include:
