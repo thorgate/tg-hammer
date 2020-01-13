@@ -11,7 +11,7 @@ class Mercurial(BaseVcs):
     NAME = 'Mercurial'
 
     def version(self):
-        with self.cd(self.code_dir), self.hide('running'):
+        with self.cd(self.code_dir):
             commit_id, branch = self.remote_cmd('hg id -nb', silent=True).split()
 
             separator = ':|:|:'
@@ -19,7 +19,7 @@ class Mercurial(BaseVcs):
                                                        "'{node|short}%(sep)s{author}%(sep)s{desc|firstline}\\n' -r %(id)s") % dict(
                 sep=separator,
                 id=commit_id,
-            )).split(separator)
+            ), silent=True).split(separator)
 
             commit_id = '%s:%s' % (commit_id, c_hash)
 
@@ -50,12 +50,12 @@ class Mercurial(BaseVcs):
             self.update(revision)
 
     def get_branch(self):
-        with self.cd(self.code_dir), self.hide('running'):
+        with self.cd(self.code_dir):
             return self.remote_cmd('hg id -b', silent=True).strip()
 
     def pull(self):
         with self.cd(self.code_dir):
-            self.remote_cmd('hg pull')
+            self.remote_cmd('hg pull', silent=True)
 
     def update(self, revision=''):
         # Default revision to empty string if it is None
@@ -69,7 +69,7 @@ class Mercurial(BaseVcs):
     def get_revset_log(self, revs):
         with self.cd(self.code_dir):
             result = self.remote_cmd("hg --config ui.color=never --config ui.paginate=never log --template '{rev}:{node|short} {branch} "
-                                     "{author} {desc|firstline}\\n' -r '%s'" % revs)
+                                     "{author} {desc|firstline}\\n' -r '%s'" % revs, silent=True)
 
             if not result:
                 return []
@@ -77,7 +77,7 @@ class Mercurial(BaseVcs):
             return list(filter(lambda y: y, [x.strip() for x in (result.split('\n') or [])]))
 
     def deployment_list(self, revision=''):
-        with self.cd(self.code_dir), self.hide('running', 'stdout'):
+        with self.cd(self.code_dir):
             # First lets pull
             self.pull()
 

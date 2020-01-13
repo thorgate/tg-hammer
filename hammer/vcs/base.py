@@ -5,25 +5,6 @@ import ftfy
 from hammer.util import is_fabric1
 
 
-class ForceSilent(object):
-    """
-    The core concept of "output levels" is gone on fabric2 - see: https://www.fabfile.org/upgrading.html#upgrading
-
-    To mimic behaviour of old fabric we just use our own context manager which updates `silence` value of vcs instance. All commands that
-     are executed by vcs check the self.silence and silence their output if it is True.
-    """
-    def __init__(self, vcs_instance, *args, **kwargs):
-        self.vcs = vcs_instance
-
-    def __enter__(self):
-        self.vcs.silence = True
-
-        return None
-
-    def __exit__(self, type, value, traceback):
-        self.vcs.silence = False
-
-
 class SudoCWDContext(object):
     def __init__(self, vcs_instance, path):
         self.vcs = vcs_instance
@@ -53,7 +34,6 @@ class BaseVcs(object):
         self._context = None
         self._code_dir = None
 
-        self.silence = False
         self.cmd_cwd_stack = []
 
         if self.use_sudo is None:
@@ -194,16 +174,6 @@ class BaseVcs(object):
         else:
             return self.context.cd
 
-    def hide(self, *args, **kwargs):
-        if is_fabric1:
-            from fabric.api import hide
-            return hide(*args, **kwargs)
-
-        else:
-            # Hide is not available as a context manager on fabric2 and one should use `hide` cli arg instead.
-            #  Read more from ForceSilent docstring
-            return ForceSilent(self, *args, **kwargs)
-
     def repo_url(self):
         """ Retrieve Url of the remote repository (origin|default). If remote url can't be determined None is returned.
 
@@ -277,16 +247,20 @@ class BaseVcs(object):
     def remote_cmd(self, command, **kwargs):
         silent = kwargs.pop('silent', False)
 
-        if silent or self.silence:
-            with self.hide('running', 'stderr', 'stdout'):
-                if is_fabric1:
-                    kwargs['quiet'] = True
+        if silent:
+            if is_fabric1:
+                kwargs['quiet'] = True
 
-                else:
-                    kwargs['hide'] = True
-                    kwargs['echo'] = False
+                from fabric.api import hide
 
-                return self._remote_cmd(command, **kwargs)
+                # Note: The core concept of "output levels" is gone on fabric2 - see: https://www.fabfile.org/upgrading.html#upgrading
+                with hide('running', 'stderr', 'stdout'):
+                    return self._remote_cmd(command, **kwargs)
+
+            kwargs['hide'] = True
+            kwargs['echo'] = False
+
+            return self._remote_cmd(command, **kwargs)
 
         else:
             return self._remote_cmd(command, **kwargs)
