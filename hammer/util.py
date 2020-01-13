@@ -19,6 +19,7 @@ except ImportError:
 
 if is_fabric1:
     from fabric.api import abort, prompt
+    from fabric.utils import indent
 
 else:
     from invoke.exceptions import Exit
@@ -54,6 +55,9 @@ else:
                     print("    ({})\n".format(str(e)))
         # And return the value, too, just in case someone finds that useful.
         return value
+
+    def indent(text, spaces=4):
+        return (" " * spaces) + text
 
 
 def as_str(val):

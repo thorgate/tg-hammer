@@ -63,7 +63,7 @@ def create_docker_network(name, internal=False, cmd=remote_cmd, prefix=24, pool=
     """
     Note: With fabric2 the context argument must be set to is Connection
     """
-    allocator = DockerNetworkAllocator(cmd, context=None, pool=pool)
+    allocator = DockerNetworkAllocator(cmd, context=context, pool=pool)
     return allocator.create(name, internal=internal, prefix=prefix)
 
 
