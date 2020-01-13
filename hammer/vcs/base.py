@@ -1,5 +1,4 @@
 import re
-import sys
 
 import ftfy
 
@@ -61,10 +60,9 @@ class BaseVcs(object):
 
         >>> vcs = Vcs.init(project_root=os.path.dirname(os.path.dirname(__file__)), use_sudo=True)
         >>>
-        >>> @task(alias='test')
+        >>> @task(alias='test', hosts=['foo.bar.baz'])
         >>> def staging(c):
         >>>     defaults(c)
-        >>>     env.hosts = ['foo.bar.baz']
         >>>
         >>>     vcs.attach_context(c)
         >>>     ...
@@ -88,10 +86,9 @@ class BaseVcs(object):
 
         >>> vcs = Vcs.init(project_root=os.path.dirname(os.path.dirname(__file__)), use_sudo=True)
         >>>
-        >>> @task(alias='test')
+        >>> @task(alias='test', hosts=['foo.bar.baz'])
         >>> def staging(c):
         >>>     defaults(c)
-        >>>     env.hosts = ['foo.bar.baz']
         >>>
         >>>     vcs.attach_context(c)
         >>>     vcs.set_code_dir('/srv/myproject')
@@ -239,11 +236,9 @@ class BaseVcs(object):
 
     @classmethod
     def cleanup_command_result(cls, result):
-        # FIXME: Seems we can't get the raw bytes from a command result anymore - but ftfy wants bytes as its input. skipping ftfy for now
-        if sys.version_info >= (3, 0):
-            return result
+        str_result = ftfy.guess_bytes(result)[0] if is_fabric1 else result
 
-        return ftfy.fix_text(ftfy.guess_bytes(result)[0])
+        return ftfy.fix_text(str_result)
 
     def _remote_cmd(self, *args, **kwargs):
         if not self.use_sudo:  # pragma: no cover

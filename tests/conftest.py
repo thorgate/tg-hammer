@@ -8,13 +8,17 @@ from hammer.util import is_fabric1, as_str
 from hammer.vcs import Vcs
 
 
+def make_repo_dir(base_dir, name):
+    return os.path.join(base_dir, name)
+
+
 class VcsTestUtil(object):
     def __init__(self, vcs_type):
         self.vcs_type = vcs_type
         self.handler_name = 'Git' if vcs_type == 'git' else 'Mercurial'
 
         self.base_dir = os.path.join(os.getcwd(), '.repos')
-        self.repo_dir = os.path.join(self.base_dir, self.vcs_type)
+        self.repo_dir = make_repo_dir(self.base_dir, self.vcs_type)
 
         self.user_name = 'Testing user'
         self.user_email = 'test@test.sdf'
@@ -23,6 +27,9 @@ class VcsTestUtil(object):
         if not os.path.exists(self.base_dir):
             os.mkdir(self.base_dir)
 
+        self.reset()
+
+    def reset(self):
         if os.path.exists(self.repo_dir):
             shutil.rmtree(self.repo_dir)
 
@@ -131,7 +138,7 @@ class VcsTestUtil(object):
         else:
             subprocess.check_output(("hg push%s" % (' --new-branch' if branch else '')).split(), cwd=self.repo_dir)
 
-    def store_commit_hash(self, key, branch=None, extra_files=None):
+    def store_commit_hash(self, key, branch=None, extra_files=None, message=None):
         if branch:
             if self.vcs_type == 'git':
                 branch = (('-b %s' % branch) if not isinstance(branch, list) else branch[0])
@@ -157,7 +164,7 @@ class VcsTestUtil(object):
                 self.put_file(ex, contents=contents)
                 subprocess.check_output([self.vcs_type, 'add', ex], cwd=self.repo_dir)
 
-        subprocess.check_output([self.vcs_type, 'commit', '-m%s' % key], cwd=self.repo_dir)
+        subprocess.check_output([self.vcs_type, 'commit', '-m%s' % (message if message is not None else key)], cwd=self.repo_dir)
 
         self.get_and_store_latest_hash(key)
 

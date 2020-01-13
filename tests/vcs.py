@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 
 import pytest
@@ -633,3 +634,32 @@ def test_normalize_does_not_fail_when_detached_in_branch_name(repo):
         for branch in bad_branches:
             normalized_branch = obj.normalize_branch(branch)
             assert normalized_branch is None
+
+
+def test_vcs_special_characters(repo, get_context):
+    repo.reset()
+
+    context = get_context('staging.hammer')
+    obj = repo.get_vcs(code_dir='/srv/%s_dummy' % repo.vcs_type, context=context)
+    repo.add_remote()
+
+    repo.store_commit_hash('bar')
+    repo.push()
+
+    obj.clone(repo.default_branch)
+
+    repo.store_commit_hash('foo.txt', branch='another', message=u'look-an-unicode-character💀 in commit message')
+    repo.push('another')
+    obj.update('another')
+
+    expected_message = u'look-an-unicode-character💀 in commit message' \
+        if repo.vcs_type == 'git' \
+        else u'look-an-unicode-character? in commit message'
+
+    version_info = obj.version()
+    assert list(version_info) == [
+        repo.commit_hash['foo.txt'],
+        'another',
+        expected_message,
+        repo.user_full,
+    ]
