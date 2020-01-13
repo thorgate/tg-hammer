@@ -21,7 +21,7 @@ requirements = [str(ir.req) for ir in parse_requirements('requirements/%s' % bas
 test_requirements = [str(ir.req) for ir in parse_requirements('requirements/development.txt', session=uuid.uuid1())]
 
 setup(
-    name=hammer.__name__,
+    name=hammer.hammer_name,
     version=hammer.__version__,
     description=hammer.__description__,
     long_description=open('README.md').read(),
