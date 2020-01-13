@@ -104,6 +104,8 @@ class Git(BaseVcs):
         return commit_id, branch, message, author
 
     def _get_commit_branch(self, commit_id):
+        candidates = []
+
         # Attempt to figure out the branch/branches via git branch --contains
         try:
             candidates = self.remote_cmd(
@@ -436,7 +438,7 @@ class Git(BaseVcs):
         with self.cd(self.code_dir):
             result = self.remote_cmd("git --no-pager diff --name-status %s" % revision_set, silent=True).splitlines()
 
-            return map(lambda x: x.replace('\t', ' '), result)
+            return list(map(lambda x: x.replace('\t', ' '), result))
 
     def get_revset_log(self, revs, base_branch=None):
         with self.cd(self.code_dir):
