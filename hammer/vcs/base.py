@@ -7,7 +7,7 @@ from hammer.util import is_fabric1
 
 class ForceSilent(object):
     """
-    The core concept of “output levels” is gone on fabric2 - see: https://www.fabfile.org/upgrading.html#upgrading
+    The core concept of "output levels" is gone on fabric2 - see: https://www.fabfile.org/upgrading.html#upgrading
 
     To mimic behaviour of old fabric we just use our own context manager which updates `silence` value of vcs instance. All commands that
      are executed by vcs check the self.silence and silence their output if it is True.
