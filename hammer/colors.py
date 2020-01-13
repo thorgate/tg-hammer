@@ -11,6 +11,13 @@ except ImportError:
         return dict(style='bold') if bold else dict()
 
 
+def red(*args, **kwargs):
+    bold = kwargs.pop('bold', False)
+    kwargs.update(style_args(bold))
+
+    return colors.red(*args, **kwargs)
+
+
 def green(*args, **kwargs):
     bold = kwargs.pop('bold', False)
     kwargs.update(style_args(bold))
@@ -18,11 +25,11 @@ def green(*args, **kwargs):
     return colors.green(*args, **kwargs)
 
 
-def red(*args, **kwargs):
+def blue(*args, **kwargs):
     bold = kwargs.pop('bold', False)
     kwargs.update(style_args(bold))
 
-    return colors.red(*args, **kwargs)
+    return colors.blue(*args, **kwargs)
 
 
 def yellow(*args, **kwargs):
