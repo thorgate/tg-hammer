@@ -18,7 +18,7 @@ from collections import deque
 from itertools import chain
 from ipaddress import IPv4Network, IPv4Interface
 
-from hammer.util import is_fabric1
+from hammer.util import as_str, is_fabric1
 
 __all__ = ['create_docker_network', 'DockerNetworkAllocator', 'OutOfNetworks']
 
@@ -88,7 +88,7 @@ class DockerNetworkAllocator(object):
     def _docker(self, args):
         # lord have mercy
         cmd = ' '.join("'{}'".format(arg) for arg in chain(['docker'], args))
-        output = self._cmd(cmd, context=self._context).decode('utf8').strip()
+        output = as_str(self._cmd(cmd, context=self._context)).strip()
 
         if output == '':
             return []
