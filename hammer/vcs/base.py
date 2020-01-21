@@ -88,6 +88,14 @@ class BaseVcs(object):
     @property
     def code_dir(self):
         if self._code_dir is None:
+            if is_fabric1:
+                from fabric.api import env
+
+                code_dir = getattr(env, 'code_dir', None)
+
+                if code_dir is not None:
+                    return code_dir
+
             raise EnvironmentError('%s: Please provide code_dir (via init kwargs / set_code_dir%s)' % (self.NAME,
                                                                                                        ' / `env`' if is_fabric1 else ''))
 
