@@ -7,7 +7,7 @@ from hammer.docker_network import local_cmd, create_docker_network
 from ipaddress import IPv4Network
 
 
-def fake_cmd(args):
+def fake_cmd(args, context=None):
     return b''
 
 

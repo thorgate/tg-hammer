@@ -6,7 +6,6 @@ services:
   - docker
 
 before_install:
-  - docker pull python:2.7.13
 
 script:
   - docker-compose --version
@@ -17,22 +16,31 @@ notifications:
     email: false
 
 after_success:
-  - pip install coveralls
-  - coveralls
+  - test $PYTHON_VERSION = "3.8" && pip install coveralls && coveralls
+
+jobs:
+  include:
+  - python: "2.7.17"
+    env: PYTHON_VERSION=2.7.17
+  - python: "3.7"
+    env: PYTHON_VERSION=3.7
+  - python: "3.8"
+    env: PYTHON_VERSION=3.8
 
 deploy:
   provider: pypi
   user: thorgate
   password:
     secure: >
-      lExKYluVHK4Xbvl8aO17SHZ0A+PkZUaLvZfhRdzWwvy3hPh1EHTZQhiYP7TaLI/Fzu0hEXo430KuDYG5pzlP28BUHBlmmMCTD03mQBo2+KEYk
-      2eeCFVZNDhaXO3vi6a+ogIYVSgGA0wE7UGok/JYr+fmyIImRy/YA62ggAurgmS65TcgkYiI1K9jbhRPBAdU8pU3QxZJTUAPPCdePgURw5CM0J
-      Or7NQeSiyZaGczoLmgF15+204+jKI4PC7JCVDeDLWVxSvjylDa80LL6f24KXpkjx3YRlEv++Dlt3Av/S46r0zzI27MhDX+LO2zHmJcHXMWEA0
-      KN/1XQ29352ZE+m60HbzjEDdDRunSPZ6ivBvXrgl4Jvc597oQHXObXJHdL4AqkJ1/V4qbxrY5ljYZsINN1q+Vh8ooP/zzOLjIjdVcOXry2ReL
-      Bl+LyFG4z59x+NG8mDbzjB9E6KwQkXDf1J5cTtKrk2JUX/gkujma+nnrhVqLzJ3CC9FYqW5NrCDRpBVFPSNt4EjSO5T8U1Hq3UR7A3cUJ9ZKe
-      HlrWQkuCHsTAuq5vwSwFgPIyZfld5Ab7YMGl4JlWGd2KkytDnfRN8qoF/HMCAqYnBRFV2Qsybu7k/5Hk7kedzCav3onE5+Q4BZxRJLfAVNP1X
-      XE4TL51n/eek3gaT2bAvXJ3RGX5kQ=
+      cfDtspUHU3Q5V6Dl2LhxEs5gCsB/f16yWKP2ibwKFuqGD323O6Pk3UAlGIBk+c+M9ebsYnftq2IjOkJnVpfCRYLnwM0QmHCzNNKwXHhTSAy9p
+      C0BJhRP/JPd6SqopnLz/GrqY3cb0Z6dMvq2NXtcG3DBX4YgRnXuoZlH7YBgz5BwJm2p1ueP99v45hP0Qnlm8frEyhzjMufZN5QtCVlr045902
+      Uk7IX497JntXM00pzXN8ODZOEeHCMcSMaKaT5Yib1v2QTibpcBwfLhqXmx1RKCODLKZNdyWMxqeKt5FemY6TMo4dPz7JuGOyTwH4SUEAGf8ls
+      DOQdmUCutqWdcI6bBNkaZ1eZ2WYv17iUHq5sp9IRWiznyP2y9q97pbtZILCCzfdi0XIZbd/Bp4UwPsaCJJG7oPSfKdmjbGi77+RLNTXI9NUYE
+      zML4+Dp/72WrrHhfM5Z0ut6nsBLN6dUUizsIw41cYm8ZoOiH4MXZx2AHmqo1/94BuVymBabU3Znk8eqQQXIRjMvhuoKS6GTrAELgRVQruQ91E
+      QxIk+w8uCbpGDutFeMy9LLfdWDYcK7TBqyzJ4+zSZq/Rzr+nsN4rvlgxplW6swBa9yr93COAofr4FxF0c+luE5SoSFtQe2x9TqeXHCPxljTKM
+      kIr4U7jhTcnf7JGxK4xFbLju1IEKg=
   on:
     tags: true
     distributions: sdist bdist_wheel
     repo: thorgate/tg-hammer
+    python: "3.8"

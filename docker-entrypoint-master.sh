@@ -2,7 +2,7 @@
 
 service ssh restart
 
-coverage run -m py.test
+coverage run -m py.test -v
 # Uncomment the line below and comment the line above to leave the master running.
 # tail -f /dev/null
 

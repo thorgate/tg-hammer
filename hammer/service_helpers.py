@@ -3,8 +3,14 @@ import os
 from copy import copy
 from StringIO import StringIO
 
-from fabric import colors
-from fabric.api import abort, env, get, put, require, sudo
+try:
+    from fabric.api import env, get, put, require, sudo
+
+except ImportError:
+    from fabric import env, get, put, require, sudo
+
+from hammer.colors import red
+from hammer.util import abort
 
 
 DAEMON_TYPES = {
@@ -156,6 +162,6 @@ def manage_service(names, action, raise_errors=True, daemon_type=None):
                 sudo(full_cmd, warn_only=True)
 
             except Exception as e:
-                print(colors.red('Failed: %s', full_cmd))
+                print(red('Failed: %s', full_cmd))
                 print(e)
                 print('')

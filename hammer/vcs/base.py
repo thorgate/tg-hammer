@@ -1,7 +1,23 @@
 import re
+
 import ftfy
 
-from fabric.api import sudo, run, env, hide
+from hammer.util import is_fabric1
+
+
+class SudoCWDContext(object):
+    def __init__(self, vcs_instance, path):
+        self.vcs = vcs_instance
+
+        self.path = path
+
+    def __enter__(self):
+        self.vcs.cmd_cwd_stack.append(self.path)
+
+        return None
+
+    def __exit__(self, type, value, traceback):
+        self.vcs.cmd_cwd_stack.pop(-1)
 
 
 class BaseVcs(object):
@@ -13,17 +29,158 @@ class BaseVcs(object):
 
     def __init__(self, project_root, use_sudo=None, code_dir=None, **kwargs):
         self.project_root = project_root
-        self.code_dir = code_dir
         self.use_sudo = use_sudo
 
+        self._context = None
+        self._code_dir = None
+
+        self.cmd_cwd_stack = []
+
         if self.use_sudo is None:
-            self.use_sudo = getattr(env, 'use_sudo', False)
+            if is_fabric1:
+                from fabric.api import env
+                self.use_sudo = getattr(env, 'use_sudo', False)
 
-        if self.code_dir is None:
-            self.code_dir = getattr(env, 'code_dir', None)
+            else:
+                raise EnvironmentError('%s: Please provide use_sudo (via init kwargs)' % self.NAME)
 
-            if self.code_dir is None:
-                raise EnvironmentError('%s: Please provide code_dir (via `init_kwargs` or `env`)' % self.NAME)
+        if code_dir is None and is_fabric1:
+            from fabric.api import env
+
+            self.set_code_dir(getattr(env, 'code_dir', None))
+
+        else:
+            self.set_code_dir(code_dir)
+
+    @property
+    def cmd_cwd(self):
+        if self.cmd_cwd_stack:
+            return self.cmd_cwd_stack[-1]
+
+        return None
+
+    @property
+    def context(self):
+        if self._context is None:
+            raise EnvironmentError('%s: Please attach fabric context with self.attach_context')
+
+        return self._context
+
+    def attach_context(self, context):
+        """Bind fabric context to vcs
+
+        This should be called from server fabric task (like test or live), for example:
+
+        >>> vcs = Vcs.init(project_root=os.path.dirname(os.path.dirname(__file__)), use_sudo=True)
+        >>>
+        >>> @task(alias='test', hosts=['foo.bar.baz'])
+        >>> def staging(c):
+        >>>     defaults(c)
+        >>>
+        >>>     vcs.attach_context(c)
+        >>>     ...
+
+        :param context: Fabric Connection - http://docs.fabfile.org/en/2.5/api/connection.html#fabric.connection.Connection
+        :return:
+        """
+        self._context = context
+
+    @property
+    def code_dir(self):
+        if self._code_dir is None:
+            if is_fabric1:
+                from fabric.api import env
+
+                code_dir = getattr(env, 'code_dir', None)
+
+                if code_dir is not None:
+                    return code_dir
+
+            raise EnvironmentError('%s: Please provide code_dir (via init kwargs / set_code_dir%s)' % (self.NAME,
+                                                                                                       ' / `env`' if is_fabric1 else ''))
+
+        return self._code_dir
+
+    def set_code_dir(self, code_dir):
+        """
+        This should be called from server fabric task (like test or live), for example:
+
+        >>> vcs = Vcs.init(project_root=os.path.dirname(os.path.dirname(__file__)), use_sudo=True)
+        >>>
+        >>> @task(alias='test', hosts=['foo.bar.baz'])
+        >>> def staging(c):
+        >>>     defaults(c)
+        >>>
+        >>>     vcs.attach_context(c)
+        >>>     vcs.set_code_dir('/srv/myproject')
+        >>>     ...
+
+        :param code_dir: Repository directory on the remote machine
+        :type code_dir: str
+        """
+        self._code_dir = code_dir
+
+    def run(self, command, **kwargs):
+        if self.cmd_cwd:
+            with self.real_cd(self.cmd_cwd):
+                return self._run(command, **kwargs)
+
+        return self._run(command, **kwargs)
+
+    def _run(self, command, **kwargs):
+        if is_fabric1:
+            from fabric.api import run
+            return run(command, **kwargs)
+
+        else:
+            def wrapped(w_command, **w_kwargs):
+                res = self.context.run(w_command, **w_kwargs)
+
+                return res.stdout.rstrip('\n')
+
+            return wrapped(command, **kwargs)
+
+    def sudo(self, command, **kwargs):
+        if is_fabric1:
+            from fabric.api import sudo
+
+            if self.cmd_cwd:
+                with self.real_cd(self.cmd_cwd):
+                    return sudo(command, **kwargs)
+
+            return sudo(command, **kwargs)
+
+        else:
+            def wrapped(w_command, **w_kwargs):
+                # Workaround for https://github.com/pyinvoke/invoke/issues/459
+                # Once the issue is resolved in upstream we can make self.cd use builtin c.cd again and remove self.cmd_cwd
+                #  and SudoCWDContext class
+                if self.cmd_cwd:
+                    w_command = 'bash -c "cd ' + self.cmd_cwd + ' && ' + w_command + '"'
+
+                res = self.context.sudo(w_command, **w_kwargs)
+
+                return res.stdout.rstrip('\n')
+
+            return wrapped(command, **kwargs)
+
+    def cd(self, path):
+        if is_fabric1:
+            from fabric.api import cd
+            return cd(path)
+
+        else:
+            # Workaround for https://github.com/pyinvoke/invoke/issues/459
+            return SudoCWDContext(self, path)
+
+    @property
+    def real_cd(self):
+        if is_fabric1:
+            from fabric.api import cd
+            return cd
+
+        else:
+            return self.context.cd
 
     def repo_url(self):
         """ Retrieve Url of the remote repository (origin|default). If remote url can't be determined None is returned.
@@ -95,28 +252,37 @@ class BaseVcs(object):
 
         raise NotImplementedError  # pragma: no cover
 
-    def remote_cmd(self, *args, **kwargs):
+    def remote_cmd(self, command, **kwargs):
         silent = kwargs.pop('silent', False)
 
         if silent:
-            with hide('running', 'stderr', 'stdout'):
-                kwargs['quiet'] = True
+            if is_fabric1:
+                from fabric.api import hide
 
-                return self._remote_cmd(*args, **kwargs)
+                # Note: The core concept of "output levels" is gone on fabric2 - see: https://www.fabfile.org/upgrading.html#upgrading
+                with hide('running', 'stdout'):
+                    return self._remote_cmd(command, **kwargs)
+
+            kwargs['hide'] = 'out'
+            kwargs['echo'] = False
+
+            return self._remote_cmd(command, **kwargs)
 
         else:
-            return self._remote_cmd(*args, **kwargs)
+            return self._remote_cmd(command, **kwargs)
 
     @classmethod
     def cleanup_command_result(cls, result):
-        return ftfy.fix_text(ftfy.guess_bytes(result)[0])
+        str_result = ftfy.guess_bytes(result)[0] if is_fabric1 else result
 
-    def _remote_cmd(self, *args, **kwargs):
-        if not self.use_sudo:  # pragma: no cover
-            return self.cleanup_command_result(run(*args, **kwargs))
+        return ftfy.fix_text(str_result)
 
-        else:
-            return self.cleanup_command_result(sudo(*args, **kwargs))  # pragma: no cover
+    def _remote_cmd(self, command, **kwargs):
+        if self.use_sudo:
+            return self.cleanup_command_result(self.sudo(command, **kwargs))
+
+        else:  # pragma: no cover
+            return self.cleanup_command_result(self.run(command, **kwargs))
 
     def _changed_files(self, revision_set):
         raise NotImplementedError  # pragma: no cover
@@ -138,7 +304,7 @@ class BaseVcs(object):
             def finder(pattern):
                 regex = re.compile(pattern)
 
-                return filter(lambda filename: regex.search(filename), result)
+                return list(filter(lambda filename: regex.search(filename), result))
 
             if isinstance(filter_re, (list, tuple)):
                 full_result = []

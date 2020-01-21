@@ -1,12 +1,12 @@
--r base.txt
+-r base3.txt
 
 # Development needs the following packages
 
 pytest==3.10.1
 coverage
 coveralls
-pytest-flake8==0.9.1
-flake8==3.6.0
+pytest-flake8==1.0.4
+flake8==3.7.9
 mock>=1.0.1
 tox>=1.7.0
 

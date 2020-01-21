@@ -1,6 +1,7 @@
 import os
+from subprocess import CalledProcessError, check_output
 
-from fabric.api import cd, hide, lcd, local, abort
+from hammer.util import abort, as_str
 
 from .base import BaseVcs
 
@@ -10,33 +11,32 @@ class Mercurial(BaseVcs):
     NAME = 'Mercurial'
 
     def version(self):
-        with cd(self.code_dir), hide('running'):
-            commit_id, branch = self.remote_cmd('hg id -nb', quiet=True).split()
+        with self.cd(self.code_dir):
+            commit_id, branch = self.remote_cmd('hg id -nb', silent=True).split()
 
             separator = ':|:|:'
-            c_hash, author, message = self.remote_cmd(("hg log --template "
+            c_hash, author, message = self.remote_cmd(("hg --config ui.color=never --config ui.paginate=never log --template "
                                                        "'{node|short}%(sep)s{author}%(sep)s{desc|firstline}\\n' -r %(id)s") % dict(
                 sep=separator,
                 id=commit_id,
-            )).split(separator)
+            ), silent=True).split(separator)
 
             commit_id = '%s:%s' % (commit_id, c_hash)
 
         return commit_id, branch, message, author
 
     def repo_url(self):
-        with lcd(self.project_root):
-            try:
-                result = local('hg paths default', capture=True)
+        try:
+            result = as_str(check_output(['sh', '-c', 'hg paths default'], cwd=self.project_root)).rstrip('\n')
 
-            except SystemExit as e:
-                if e.code == 1:
-                    result = None
+        except CalledProcessError as e:
+            if e.returncode == 1:
+                result = None
 
-                else:
-                    raise  # pragma: no cover
+            else:
+                raise  # pragma: no cover
 
-            return result or None
+        return result or None
 
     def clone(self, revision=None):
         repo_url = self.repo_url()
@@ -50,12 +50,12 @@ class Mercurial(BaseVcs):
             self.update(revision)
 
     def get_branch(self):
-        with cd(self.code_dir), hide('running'):
-            return self.remote_cmd('hg id -b', quiet=True).strip()
+        with self.cd(self.code_dir):
+            return self.remote_cmd('hg id -b', silent=True).strip()
 
     def pull(self):
-        with cd(self.code_dir):
-            self.remote_cmd('hg pull')
+        with self.cd(self.code_dir):
+            self.remote_cmd('hg pull', silent=True)
 
     def update(self, revision=''):
         # Default revision to empty string if it is None
@@ -63,13 +63,13 @@ class Mercurial(BaseVcs):
 
         self.pull()
 
-        with cd(self.code_dir):
+        with self.cd(self.code_dir):
             self.remote_cmd('hg update %s' % revision)
 
     def get_revset_log(self, revs):
-        with cd(self.code_dir):
+        with self.cd(self.code_dir):
             result = self.remote_cmd("hg --config ui.color=never --config ui.paginate=never log --template '{rev}:{node|short} {branch} "
-                                     "{author} {desc|firstline}\\n' -r '%s'" % revs)
+                                     "{author} {desc|firstline}\\n' -r '%s'" % revs, silent=True)
 
             if not result:
                 return []
@@ -77,7 +77,7 @@ class Mercurial(BaseVcs):
             return list(filter(lambda y: y, [x.strip() for x in (result.split('\n') or [])]))
 
     def deployment_list(self, revision=''):
-        with cd(self.code_dir), hide('running', 'stdout'):
+        with self.cd(self.code_dir):
             # First lets pull
             self.pull()
 
@@ -103,9 +103,9 @@ class Mercurial(BaseVcs):
                 return {'message': "Target revision is not related to the current revision"}  # pragma: no cover
 
     def _changed_files(self, revision_set):
-        with cd(self.code_dir):
+        with self.cd(self.code_dir):
             result = self.remote_cmd("hg --config ui.color=never --config ui.paginate=never status --rev '%s'" % revision_set,
-                                     quiet=True).splitlines()
+                                     silent=True).splitlines()
 
             return result
 
