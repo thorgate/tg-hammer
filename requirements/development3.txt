@@ -2,7 +2,7 @@
 
 # Development needs the following packages
 
-pytest==3.10.1
+pytest==9.0.3
 coverage
 coveralls
 pytest-flake8==1.0.4
